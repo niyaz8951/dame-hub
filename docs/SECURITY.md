@@ -17,7 +17,7 @@ GitHub Pages and the Supabase API are reachable from the internet; that is how t
 **Internal data** = anything not meant for the public: project names, customers, prices, costs, factors, people's names beyond usernames, specs, datasheets, notes, compliance answers, files. It lives only in Supabase tables or private Storage.
 
 ## 2. Login (Supabase Auth)
-- DAME uses Supabase Auth, the standard and audited sign-in service, called with plain `fetch` from `/dame-hub/core/v1/core.js`. Users see only a **username**; internally each account has the address `<username>@users.dame-hub.local`, which is never mailed (email confirmation is off). If Supabase rejects that domain, the core uses a domain the company controls; users still never see it.
+- DAME uses Supabase Auth, the standard and audited sign-in service, called with plain `fetch` from `/dame-hub/core/v1/core.js`. Users see only a **username**; internally each account has the address `<username>@users.thinkneering.com` (a domain the owner controls; Supabase rejects made-up endings like `.local`), which is never mailed (email confirmation is off); users never see it. The domain lives in `core/v1/config.js` (`EMAIL_DOMAIN`) and in the sign-up trigger, changed together.
 - Request access = sign-up. A new account is **pending**: it can sign in but every function and every file rule refuses it (`NOT_APPROVED`) until the super user approves it. Disabled accounts are refused on the next call, not at the next login.
 - One active session per user: at sign-in the core records the session id; `core.require_user()` refuses any other session of that user. Sessions older than 12 hours are refused; the user signs in again.
 - Error messages never say whether a username exists ("Wrong username or password").
