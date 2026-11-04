@@ -9,7 +9,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 ## Built (step 1, 2026-11-04)
 - `docs/`: SECURITY, STANDARDS, TILE-CONTRACT, NEW-TILE, MOVE-ACCOUNT (the rule book), STATUS, TILES, RUNBOOK.
 - `db/core/001_init.sql`: schema `core` (profiles, tiles, tile_access, audit, migrations), sign-up trigger, `core.require_session/require_user/require_tile/has_tile/is_tile_admin/username_of/audit/applied/make_super/reset_password/require_super`, `public.core_*` (site_info, session_start, me, my_tiles, sign_out, password_changed, set_display_name, admin_users, admin_set_status, admin_tiles, admin_tile_save, admin_tile_enable, admin_audit, tile_users, tile_access_set), `core.security_check()` (9 checks). `db/core/tests.sql` (allowed + refused for every function, rolled back), `db/core/seed-staging.sql`.
-- `core/v1/`: theme.css (tokens, day/night, components), config.js, api.js (Auth, rpc, Storage with plain fetch), core.js (guard, topbar, sheet, toast, helpers), icons (13 SVG), README.md (CSP line, API).
+- `core/v1/`: theme.css (Daikin palette, day/night, components), config.js, api.js (Auth, rpc, Storage with plain fetch), core.js (guard, topbar, sheet, toast, helpers), icons (13 SVG), README.md (CSP line, API).
 - Pages: `index.html` (sign in, request access, waiting), `dashboard.html`, `admin.html` (requests, users, tiles + access, audit), `access.html` (tile admins), `account.html` (name, password, forced change), `404.html`, `robots.txt`, `.nojekyll`.
 - `tools/serve.mjs` (GitHub Pages layout locally), `tools/test/` (local Postgres stand-in for Supabase + Playwright run; all green).
 - `demo/`: a complete tile - page, `db/demo/001_init.sql` (schema, 4 functions, private bucket + policies), `tests.sql`, docs.
@@ -38,6 +38,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 
 ## Changes tiles must know
+- 2026-11-04 - Site is named **DAME HUB**; theme now carries the Daikin Middle East palette (`--brand #0097E0`, night `#2FB0EC`), the layers-glyph mark and favicons in `core/v1/icons/`. Token names unchanged; `--link`, `--focus`, `--glass`, `--scrim`, `--ease`, `--brand-sky`, `--brand-navy` added. Pages add `<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg">` and the apple-touch-icon line (see `core/v1/README.md`).
 - 2026-11-04 - core/v1 first version. Icons are `.icon.i-<name>`; `Core.requireLogin` returns a promise of `me`; `core.username_of` available; CSP line in `core/v1/README.md`.
 
 ## Security notes

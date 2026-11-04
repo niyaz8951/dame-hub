@@ -55,7 +55,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 ## 6. Theme
 - Tokens only in `/dame-hub/core/v1/theme.css`: brand blue, surfaces, text, lines, success / warning / danger, radius, spacing; day and night (follows the device, user can switch). Never a hard-coded colour in a tile.
 - System font. Calm, clear, plenty of space; pleasant to use on a laptop and a phone.
-- Site name `DAME` and the mark come from `core/v1/config.js` (`SITE_NAME`) and `core/v1/icons/`. No company logo unless the owner supplies one.
+- Site name `DAME HUB` and the mark (the layers glyph on Daikin blue, `core/v1/icons/mark.svg`, `favicon.svg`) come from `core/v1/config.js` (`SITE_NAME`) and `core/v1/icons/`. Colours are the Daikin Middle East palette (`--brand #0097E0`); no other logo.
 
 ## 7. Quality bar (every page, every function)
 - Day and night; phone width 390 px with no sideways page scroll.

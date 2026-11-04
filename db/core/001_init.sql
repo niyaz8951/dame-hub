@@ -246,7 +246,7 @@ create trigger dame_on_auth_user_created
 -- Login page, anonymous: site name only.
 create or replace function public.core_site_info()
 returns jsonb language sql security definer set search_path = '' stable as $$
-  select jsonb_build_object('site_name', 'DAME', 'core_version', 1);
+  select jsonb_build_object('site_name', 'DAME HUB', 'core_version', 1);
 $$;
 revoke execute on function public.core_site_info() from public;
 grant execute on function public.core_site_info() to anon, authenticated;

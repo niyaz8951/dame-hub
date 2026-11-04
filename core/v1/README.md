@@ -7,6 +7,8 @@ Load order in `<head>`, after the two meta lines:
 <meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">
 <script src="/dame-hub/core/v1/config.js" defer></script>
 <script src="/dame-hub/core/v1/api.js" defer></script>
 <script src="/dame-hub/core/v1/core.js" defer></script>
@@ -71,4 +73,4 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 ## Theme
 Tokens: `--brand --brand-strong --brand-soft --on-brand --bg --surface --surface-2 --text --text-2 --text-3 --line --line-strong --success(-soft) --warning(-soft) --danger(-soft) --radius --radius-sm --space-1..7 --shadow --font --mono`.
 Classes: `.icon.i-<name> .card .btn(.primary .danger .ghost .small .block) .field .hint .error .check .switch .table-wrap .badge(.brand .success .warning .danger) .chip .chips .notice(.success .warning .danger .brand) .state .tabs .tiles .tile .icon.<name> .row .stack .page-head .narrow .muted .faint .mono`.
-Night mode follows the device; the topbar button overrides it (stored in `localStorage` as `dame.theme`).
+Palette: Daikin Middle East (`--brand #0097E0`, `--brand-sky #54C3F1`, `--brand-navy #0B2A4A`). Night mode follows the device; the topbar button overrides it (stored in `localStorage` as `dame.theme`).

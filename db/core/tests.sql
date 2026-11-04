@@ -52,7 +52,7 @@ begin
 
   -- ---- anon may call core_site_info and nothing else
   perform pg_temp.act_as(null);
-  select public.core_site_info() into v; if v ->> 'site_name' <> 'DAME' then raise exception 'site_info'; end if;
+  select public.core_site_info() into v; if v ->> 'site_name' <> 'DAME HUB' then raise exception 'site_info'; end if;
   perform pg_temp.expect_error('select public.core_me()', 'PERMISSION');
   perform pg_temp.expect_error('select public.core_my_tiles()', 'PERMISSION');
   perform pg_temp.expect_error('select public.core_session_start()', 'PERMISSION');

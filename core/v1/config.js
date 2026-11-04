@@ -14,7 +14,7 @@ window.DAME_CONFIG = (function () {
   var host = window.location.hostname;
   var isLocal = host === 'localhost' || host === '127.0.0.1';
   return {
-    SITE_NAME: 'DAME',
+    SITE_NAME: 'DAME HUB',
     CORE: '/dame-hub',                    // the admin repo is always served here
     ENV: isLocal ? 'staging' : 'live',
     SUPABASE: isLocal ? STAGING : LIVE,
