@@ -46,8 +46,8 @@
     var m = email.value.trim().toLowerCase();
     setError(err, '');
     mark(email, !m); mark(pass, !pass.value);
-    if (!m || !pass.value) { setError(err, 'Enter your email and password.'); return; }
-    if (!Api.auth.validEmail(m)) { setError(err, Api.messages.BAD_LOGIN); return; }
+    if (!m || !pass.value) { setError(err, 'Enter your username or email, and your password.'); return; }
+    if (!(m.indexOf('@') >= 0 ? Api.auth.validEmail(m) : Api.auth.validUsername(m))) { setError(err, Api.messages.BAD_LOGIN); return; }
     Core.busy(btn, function () {
       return Api.auth.signIn(m, pass.value).then(afterSignIn);
     }).catch(function (ex) { setError(err, Api.errorMessage(ex)); pass.value = ''; pass.focus(); });

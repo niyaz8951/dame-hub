@@ -28,7 +28,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - **Who runs what:** the owner runs the GitHub account, `dame-hub` and Supabase, and applies every SQL file. Each tile repo has its team as collaborators with write access to that repo only. A tile id never reuses the name of another repo in the account.
 
 ## 3. Users and roles
-- Account = the user's own email address + password (Supabase Auth). Username: 3-30 characters, `a-z 0-9 . _ -`, lower case, unique; shown everywhere instead of the address. Display name. Nothing else personal.
+- Account = username + password, created by the super user (no email needed), or self-service with the user's own email address + password (Supabase Auth). Username: 3-30 characters, `a-z 0-9 . _ -`, lower case, unique; shown everywhere instead of the address. Display name. Nothing else personal.
 - Status: `pending` (requested), `active`, `disabled`. Only `active` users get anything.
 - **Super user** (the owner): approves accounts, creates and switches tiles, names tile admins, sees the audit.
 - **Tile admin:** gives and removes access and rights for his tile only.

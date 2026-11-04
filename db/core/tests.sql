@@ -81,6 +81,17 @@ begin
   perform pg_temp.expect_error(format('select public.core_admin_set_status(%L, ''disabled'')', (select id from t_ids where k = 't.super')), 'INVALID:user');
   perform pg_temp.expect_error(format('select public.core_admin_set_status(%L, ''gone'')', (select id from t_ids where k = 't.user')), 'INVALID:status');
   select count(*) into n from public.core_admin_users('pending'); if n < 1 then raise exception 'pending list'; end if;
+  -- owner-created account: active at once, must change password, internal address
+  select public.core_admin_create_user('t.made', 'Made By Owner', 'TempPass2026') into v;
+  if v ->> 'username' <> 't.made' then raise exception 'create user'; end if;
+  perform pg_temp.expect_error($q$select public.core_admin_create_user('t.made', 'x', 'TempPass2026')$q$, 'TAKEN:username');
+  perform pg_temp.expect_error($q$select public.core_admin_create_user('Bad Name', 'x', 'TempPass2026')$q$, 'INVALID:username');
+  perform pg_temp.expect_error($q$select public.core_admin_create_user('t.made2', 'x', 'short')$q$, 'INVALID:password');
+  reset role;
+  if not exists (select 1 from core.profiles p join auth.users u on u.id = p.id where p.username = 't.made' and p.status = 'active' and p.must_change_password and u.email = 't.made@users.dame-hub.local'
+                 and u.encrypted_password = extensions.crypt('TempPass2026', u.encrypted_password)) then raise exception 'created account wrong'; end if;
+  if not exists (select 1 from auth.identities i join auth.users u on u.id = i.user_id where u.email = 't.made@users.dame-hub.local') then raise exception 'identity missing'; end if;
+  perform pg_temp.act_as('t.super'); perform public.core_session_start();
   select count(*) into n from public.core_admin_users(null) where email like '%@%'; if n < 6 then raise exception 'emails in admin list'; end if;
   raise notice 'approval ok';
 
@@ -134,6 +145,7 @@ begin
   select count(*) into n from public.core_my_tiles(); if n <> 0 then raise exception 'none sees tiles'; end if;
   perform pg_temp.expect_error('select public.core_me(''t-tile'')', 'NO_ACCESS');
   perform pg_temp.expect_error('select public.core_admin_users()', 'NO_RIGHT');
+  perform pg_temp.expect_error($q$select public.core_admin_create_user('t.x', 'x', 'TempPass2026')$q$, 'NO_RIGHT');
   perform pg_temp.expect_error('select public.core_admin_tiles()', 'NO_RIGHT');
   perform pg_temp.expect_error('select public.core_admin_audit()', 'NO_RIGHT');
   perform pg_temp.expect_error('select public.core_admin_tile_enable(''t-tile'', false)', 'NO_RIGHT');

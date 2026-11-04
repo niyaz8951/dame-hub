@@ -16,6 +16,9 @@ Order: staging first (while it exists as a separate project), test, then live. A
 4. Admin page > Tiles > New tile `demo` (name Demo, right `edit`), then `demo/db/demo/001_init.sql`, security check, switch the tile on.
 Staging only: `db/core/seed-staging.sql` creates the demo tile and four demo accounts (password `DemoPass2026`). Never on live.
 
+## Create a user (no email needed)
+Admin page > Users > **New user**: username, display name, temporary password (10+ characters, mixed case, a digit). Tell the person the username and the temporary password by voice; he signs in with them and must choose his own password at once. Users who prefer their own email can still use **Request access** on the site and wait for your approval.
+
 ## Approve, refuse, disable, enable a user
 Admin page > Requests (approve or refuse) and Users (disable or enable). A disabled user is refused on his next call and cannot sign in. In SQL if needed:
 ```sql

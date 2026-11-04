@@ -14,7 +14,7 @@ window.Api = (function () {
     NO_RIGHT: 'You do not have the right to do this.',
     NOT_FOUND: 'Not found.',
     NETWORK: 'Cannot reach the server. Check the connection and try again.',
-    BAD_LOGIN: 'Wrong email or password.',
+    BAD_LOGIN: 'Wrong username or password.',
     TAKEN: 'That email address is already registered. Sign in instead.',
     TAKEN_USERNAME: 'That username is already taken.',
     WEAK_PASSWORD: 'Password: at least 10 characters with lower case, upper case and a digit.',
@@ -86,7 +86,8 @@ window.Api = (function () {
       .then(function (res) { return parseBody(res).then(function (body) { if (!res.ok) throw authError(res.status, body); return body; }); });
   }
 
-  function emailFor(email) { return String(email || '').trim().toLowerCase(); }
+  // A username (no @) means an owner-created account; an address is used as typed.
+  function emailFor(login) { var v = String(login || '').trim().toLowerCase(); return v.indexOf('@') >= 0 ? v : v + '@' + cfg.INTERNAL_DOMAIN; }
 
   var auth = {
     validUsername: function (u) { return /^[a-z0-9._-]{3,30}$/.test(String(u || '').trim().toLowerCase()); },
@@ -149,6 +150,7 @@ window.Api = (function () {
   function restError(status, body) {
     var msg = body && body.message || '';
     if (/^(SIGNED_OUT|NOT_APPROVED|NO_ACCESS|NO_RIGHT|NOT_FOUND|INVALID:[a-z_]+)$/.test(msg)) return new ApiError(msg, messageFor(msg), status, body);
+    if (msg === 'TAKEN:username') return new ApiError('TAKEN:username', MESSAGES.TAKEN_USERNAME, status, body);
     var m = /ALREADY_APPLIED|INVALID:[a-z_]+/.exec(msg);
     if (m) return new ApiError(m[0], messageFor(m[0]), status, body);
     if (status === 401) return new ApiError('SIGNED_OUT', MESSAGES.SIGNED_OUT, status, body);

@@ -47,7 +47,7 @@ try {
   log('sign in super');
   await signIn(page, 'niyaz@gmail.com', 'wrong-Password1');
   await page.waitForSelector('#si-error:not([hidden])');
-  await expect((await page.textContent('#si-error')).includes('Wrong email'), 'wrong password message');
+  await expect((await page.textContent('#si-error')).includes('Wrong username'), 'wrong password message');
   await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026');
   await page.waitForURL('**/dashboard.html');
   await page.waitForSelector('.tile');
@@ -78,6 +78,11 @@ try {
   await page.waitForFunction(() => document.querySelector('#users tbody tr .badge.success'));
   await expect(true, 'enable user again');
   await page.fill('#user-filter', '');
+  await page.click('#user-new'); await page.waitForSelector('.sheet');
+  await page.fill('#nu-user', 'made.one'); await page.fill('#nu-name', 'Made One'); await page.fill('#nu-pass', 'TempPass2026');
+  await page.click('.sheet .actions button.primary');
+  await page.waitForFunction(() => !document.querySelector('.sheet') && document.querySelector('#users').textContent.includes('made.one'));
+  await expect(true, 'owner-created user listed');
 
   log('admin tiles');
   await page.click('[data-tab=tiles]');
@@ -206,6 +211,17 @@ try {
   await page.fill('#new1', 'FinalPass2026'); await page.fill('#new2', 'FinalPass2026'); await page.click('#pass-form button');
   await page.waitForURL('**/dashboard.html');
   await expect(true, 'after the change, on to the dashboard');
+
+  // 4b. owner-created user signs in with username only, must change password
+  log('owner-created user');
+  await page.context().close(); page = await newPage();
+  await page.goto(B + '/dame-hub/'); await page.fill('#si-email', 'made.one'); await page.fill('#si-pass', 'TempPass2026'); await page.click('#signin button[type=submit]');
+  await page.waitForURL('**/account.html?change=1**');
+  await expect(await page.isVisible('#must-change'), 'username-only sign-in works and forces a password change');
+  await expect(!(await page.textContent('#username')).includes('@users.'), 'internal address is not shown');
+  await page.fill('#new1', 'MadePass2026'); await page.fill('#new2', 'MadePass2026'); await page.click('#pass-form button');
+  await page.waitForURL('**/dashboard.html');
+  await expect(true, 'owner-created user reaches the dashboard');
 
   // 5. disabled user
   log('disabled user');

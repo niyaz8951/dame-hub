@@ -18,6 +18,7 @@ window.DAME_CONFIG = (function () {
     CORE: '/dame-hub',                    // the admin repo is always served here
     ENV: isLocal ? 'staging' : 'live',
     SUPABASE: isLocal ? STAGING : LIVE,
+    INTERNAL_DOMAIN: 'users.dame-hub.local', // accounts the owner creates: <username>@ this; never mailed, never shown
     SESSION_KEY: 'dame.session',
     THEME_KEY: 'dame.theme',
     SESSION_HOURS: 12

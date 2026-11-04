@@ -64,6 +64,30 @@
     Api.rpc('core_admin_users', { p_status: null }).then(function (rows) { usersAll = rows; renderUsers(); }).catch(function (err) { fail(host, err); });
   }
   $('#user-filter').addEventListener('input', renderUsers);
+  $('#user-new').addEventListener('click', function () {
+    function field(id, label, hint, attrs) {
+      var input = el('input', Object.assign({ id: 'nu-' + id }, attrs || {}));
+      return el('div', { class: 'field' }, el('label', { for: 'nu-' + id, text: label }), input, hint ? el('span', { class: 'hint', text: hint }) : null);
+    }
+    var err = el('p', { class: 'notice danger', hidden: true });
+    var body = el('div', null,
+      el('p', { class: 'muted', text: 'The person signs in with this username and the temporary password, and must choose a new password at the first sign-in. No email is needed.' }),
+      field('user', 'Username', '3 to 30 characters: lower-case letters, digits, dot, dash, underscore.', { maxlength: 30, autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' }),
+      field('name', 'Display name', null, { maxlength: 60, autocomplete: 'off' }),
+      field('pass', 'Temporary password', 'At least 10 characters with lower case, upper case and a digit. Tell it to the person by voice, not in writing.', { autocomplete: 'off' }),
+      err);
+    Core.sheet({ title: 'New user', body: body, actions: [
+      { label: 'Cancel', value: false },
+      { label: 'Create', kind: 'primary', onClick: function () {
+        var u = body.querySelector('#nu-user').value.trim().toLowerCase(), n = body.querySelector('#nu-name').value.trim(), p = body.querySelector('#nu-pass').value;
+        err.hidden = true;
+        if (!Api.auth.validUsername(u)) { err.textContent = 'Please check the username.'; err.hidden = false; return false; }
+        if (!Api.auth.validPassword(p)) { err.textContent = Api.messages.WEAK_PASSWORD; err.hidden = false; return false; }
+        return Api.rpc('core_admin_create_user', { p_username: u, p_display_name: n || u, p_temp_password: p })
+          .then(function () { Core.toast('Created ' + u, 'success'); loadUsers(); return true; },
+                function (ex) { err.textContent = ex.code === 'TAKEN:username' ? Api.messages.TAKEN_USERNAME : Api.errorMessage(ex); err.hidden = false; return false; });
+      } }] });
+  });
   function renderUsers() {
     var host = $('#users'); Core.clear(host);
     var q = $('#user-filter').value.trim().toLowerCase();
@@ -74,7 +98,7 @@
     rows.forEach(function (u) {
       var status = el('span', { class: 'badge ' + (u.status === 'active' ? 'success' : u.status === 'pending' ? 'warning' : 'danger'), text: u.status });
       var tr = el('tr', null,
-        el('td', null, el('div', null, el('strong', { text: u.display_name }), u.is_super ? el('span', { class: 'badge brand', text: 'super' }) : null), el('div', { class: 'faint mono', text: '@' + u.username + (u.email ? ' - ' + u.email : '') })),
+        el('td', null, el('div', null, el('strong', { text: u.display_name }), u.is_super ? el('span', { class: 'badge brand', text: 'super' }) : null), el('div', { class: 'faint mono', text: '@' + u.username + (u.email && u.email.indexOf('@' + DAME_CONFIG.INTERNAL_DOMAIN) < 0 ? ' - ' + u.email : '') })),
         el('td', null, status),
         el('td', null, u.tiles.length ? u.tiles.join(', ') : el('span', { class: 'faint', text: '-' })),
         el('td', { text: u.last_sign_in ? Core.dateTime(u.last_sign_in) : '-' }));
