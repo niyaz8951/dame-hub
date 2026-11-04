@@ -21,7 +21,7 @@ async function newPage(viewport) {
 async function shot(page, name) { await page.screenshot({ path: 'tools/test/out/' + name + '.png', fullPage: true }); }
 async function expect(cond, msg) { if (!cond) { errors.push(step + ': FAILED ' + msg); console.log('  ✗ ' + msg); } else console.log('  ✓ ' + msg); }
 async function signIn(page, user, pass) {
-  await page.goto(B + '/dame-hub/'); await page.fill('#si-user', user); await page.fill('#si-pass', pass); await page.click('#signin button[type=submit]');
+  await page.goto(B + '/dame-hub/'); await page.fill('#si-email', user.includes('@') ? user : user + '@example.com'); await page.fill('#si-pass', pass); await page.click('#signin button[type=submit]');
 }
 
 try {
@@ -29,7 +29,7 @@ try {
   let page = await newPage();
   log('request access');
   await page.goto(B + '/dame-hub/#request');
-  await page.fill('#rq-user', 'niyaz'); await page.fill('#rq-name', 'Niyaz'); await page.fill('#rq-pass', 'OwnerPass2026'); await page.fill('#rq-pass2', 'OwnerPass2026');
+  await page.fill('#rq-email', 'niyaz@gmail.com'); await page.fill('#rq-user', 'niyaz'); await page.fill('#rq-name', 'Niyaz'); await page.fill('#rq-pass', 'OwnerPass2026'); await page.fill('#rq-pass2', 'OwnerPass2026');
   await page.click('#request button[type=submit]');
   await page.waitForSelector('#pane-pending:not([hidden])');
   await expect(await page.isVisible('#pane-pending'), 'pending pane shown after request');
@@ -45,10 +45,10 @@ try {
   psql("select core.make_super('niyaz')");
   page = await newPage();
   log('sign in super');
-  await signIn(page, 'niyaz', 'wrong-Password1');
+  await signIn(page, 'niyaz@gmail.com', 'wrong-Password1');
   await page.waitForSelector('#si-error:not([hidden])');
-  await expect((await page.textContent('#si-error')).includes('Wrong username'), 'wrong password message');
-  await signIn(page, 'niyaz', 'OwnerPass2026');
+  await expect((await page.textContent('#si-error')).includes('Wrong email'), 'wrong password message');
+  await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026');
   await page.waitForURL('**/dashboard.html');
   await page.waitForSelector('.tile');
   await expect((await page.$$('.tile')).length === 1, 'super sees the demo tile (' + (await page.$$('.tile')).length + ')');
@@ -222,7 +222,7 @@ try {
   page = await newPage();
   log('night');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await signIn(page, 'niyaz', 'OwnerPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('.tile');
+  await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('.tile');
   await shot(page, 'dashboard-night');
   await page.goto(B + '/dame-hub/admin.html#tiles'); await page.waitForSelector('#tiles table'); await shot(page, 'admin-night');
   await page.context().close();

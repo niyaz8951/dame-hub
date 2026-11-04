@@ -16,6 +16,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 
 ## Decisions made in step 1 (say if any should change)
 - Super user has every tile and every right; tile admins have every *declared* right of their tile; a right not declared on the tile refuses everyone but the super user.
+- Sign-in is by the user's own email address + password (Supabase Auth has no username field and rejects made-up addresses). The username is a unique handle shown instead of the address; the address appears only on the account page and in the admin user list. Nothing is ever mailed.
 - Sessions: `core_session_start()` binds the sign-in session to the account; any other session of that user is refused; 12 hours max. The browser also drops a session older than 12 hours by itself.
 - Failed sign-ins cannot be seen by the database (Supabase Auth rejects them first); they are in Supabase > Logs > Auth. `docs/SECURITY.md` section 7 still lists them; a password-verification Auth hook can add them to `core.audit` later.
 - Default privileges: functions the owner creates in **any** schema are executable by nobody until granted (Postgres cannot do this per schema). Every SQL file grants `authenticated` explicitly, as the contract already says.
@@ -28,18 +29,20 @@ Chats that start with **DAME-ADMIN** continue from here.
 | File | `dame-hub` project |
 |---|---|
 | `db/core/001_init.sql` | applied 2026-11-04 |
-| `db/core/002_email_domain.sql` | applied 2026-11-04 (superseded by 003) |
-| `db/core/003_email_domain.sql` | - |
+| `db/core/002_email_domain.sql` | applied 2026-11-04 (superseded) |
+| `db/core/003_email_domain.sql` | applied 2026-11-04 (superseded) |
+| `db/core/004_email_signin.sql` | - |
 | `demo/db/demo/001_init.sql` | - |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
 ## Next
-1. Owner: apply `db/core/003_email_domain.sql`, security check, request access as `niyaz`, `core.make_super('niyaz')`, register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
-2. Owner: Supabase Auth settings from `01-SETUP.md` step 2.4 (confirm email off, password rules, Site URL, `public` only exposed). If Supabase refuses `@example.com` at sign-up, say so: `config.js` `EMAIL_DOMAIN` and the trigger's domain check change together (new SQL file).
+1. Owner: apply `db/core/004_email_signin.sql`, security check, request access (email + username, e.g. `ni8951`), `core.make_super('ni8951')`, register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
+2. Done: Supabase refuses made-up email domains (`.local`, `example.com`, ...), so the username-only scheme (001-003) was dropped. Since 004 an account is the user's own email + password, with a chosen username as the visible handle. No account existed before 004, so nothing migrates.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 
 ## Changes tiles must know
+- 2026-11-04 - `core_me()` also returns `email` (the caller's own address). Tiles keep showing `username`; never show or store the address in a tile.
 - 2026-11-04 - Site is named **DAME HUB**; theme now carries the Daikin Middle East palette (`--brand #0097E0`, night `#2FB0EC`), the layers-glyph mark and favicons in `core/v1/icons/`. Token names unchanged; `--link`, `--focus`, `--glass`, `--scrim`, `--ease`, `--brand-sky`, `--brand-navy` added. Pages add `<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg">` and the apple-touch-icon line (see `core/v1/README.md`).
 - 2026-11-04 - core/v1 first version. Icons are `.icon.i-<name>`; `Core.requireLogin` returns a promise of `me`; `core.username_of` available; CSP line in `core/v1/README.md`.
 

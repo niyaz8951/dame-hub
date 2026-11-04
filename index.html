@@ -22,8 +22,8 @@
       <h1>Sign in</h1>
       <form id="signin" novalidate>
         <div class="field">
-          <label for="si-user">Username</label>
-          <input id="si-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+          <label for="si-email">Email</label>
+          <input id="si-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
         </div>
         <div class="field">
           <label for="si-pass">Password</label>
@@ -38,8 +38,13 @@
 
     <div id="pane-request" hidden>
       <h1>Request access</h1>
-      <p class="muted">Choose a username and a password. The site admin approves new accounts; until then you will see a waiting message.</p>
+      <p class="muted">Your email address is how you sign in; the username is how you appear to others. The site admin approves new accounts; until then you will see a waiting message.</p>
       <form id="request" novalidate>
+        <div class="field">
+          <label for="rq-email">Email</label>
+          <input id="rq-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="120">
+          <span class="hint">Gmail or any other address. Nothing is sent to it.</span>
+        </div>
         <div class="field">
           <label for="rq-user">Username</label>
           <input id="rq-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="30">

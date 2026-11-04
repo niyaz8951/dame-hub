@@ -11,7 +11,7 @@ Order: staging first (while it exists as a separate project), test, then live. A
 
 ## First run on a fresh project
 1. `db/core/001_init.sql`, then the security check.
-2. On the site, **Request access** with your own username (e.g. `niyaz`).
+2. On the site, **Request access** with your email, a username (e.g. `niyaz`) and a password.
 3. `select core.make_super('niyaz');` - your account is active and super.
 4. Admin page > Tiles > New tile `demo` (name Demo, right `edit`), then `demo/db/demo/001_init.sql`, security check, switch the tile on.
 Staging only: `db/core/seed-staging.sql` creates the demo tile and four demo accounts (password `DemoPass2026`). Never on live.
@@ -45,7 +45,7 @@ Admin page > Tiles > the switch. Off: the tile disappears from every dashboard a
 Admin page > Users > Disable. GitHub: remove him as collaborator from his tile repo. If he was a tile admin, name another one (Tiles > Access).
 
 ## Sign-in troubles
-- "Wrong username or password" for a user who is sure: `select username, status, session_started_at from core.profiles where username = 'name';` then reset the password.
+- "Wrong username or password" for a user who is sure: `select p.username, u.email, p.status, p.session_started_at from core.profiles p join auth.users u on u.id = p.id where p.username = 'name';` then reset the password.
 - Everyone signed out at once: sessions end after 12 hours; that is normal in the morning.
 - Failed sign-in attempts are in Supabase > **Logs > Auth** (the database does not see them). Supabase rate-limits sign-in attempts; never raise those limits.
 

@@ -14,8 +14,9 @@ window.Api = (function () {
     NO_RIGHT: 'You do not have the right to do this.',
     NOT_FOUND: 'Not found.',
     NETWORK: 'Cannot reach the server. Check the connection and try again.',
-    BAD_LOGIN: 'Wrong username or password.',
-    TAKEN: 'That username is already taken.',
+    BAD_LOGIN: 'Wrong email or password.',
+    TAKEN: 'That email address is already registered. Sign in instead.',
+    TAKEN_USERNAME: 'That username is already taken.',
     WEAK_PASSWORD: 'Password: at least 10 characters with lower case, upper case and a digit.',
     UNKNOWN: 'Something went wrong. Try again.'
   };
@@ -71,6 +72,7 @@ window.Api = (function () {
     var code = body && (body.error_code || body.code) || '';
     if (status === 400 && /invalid login credentials|invalid_credentials/i.test(msg + code)) return new ApiError('BAD_LOGIN', MESSAGES.BAD_LOGIN, status, body);
     if (/already registered|user_already_exists|already been registered/i.test(msg + code)) return new ApiError('TAKEN', MESSAGES.TAKEN, status, body);
+    if (/TAKEN:username/.test(msg)) return new ApiError('TAKEN_USERNAME', MESSAGES.TAKEN_USERNAME, status, body);
     if (/weak_password|password should/i.test(msg + code)) return new ApiError('WEAK_PASSWORD', MESSAGES.WEAK_PASSWORD, status, body);
     if (/INVALID:[a-z_]+/.test(msg)) { var m = /INVALID:[a-z_]+/.exec(msg)[0]; return new ApiError(m, messageFor(m), status, body); }
     if (status === 401 || status === 403) return new ApiError('SIGNED_OUT', MESSAGES.SIGNED_OUT, status, body);
@@ -84,26 +86,27 @@ window.Api = (function () {
       .then(function (res) { return parseBody(res).then(function (body) { if (!res.ok) throw authError(res.status, body); return body; }); });
   }
 
-  function emailFor(username) { return String(username || '').trim().toLowerCase() + '@' + cfg.EMAIL_DOMAIN; }
+  function emailFor(email) { return String(email || '').trim().toLowerCase(); }
 
   var auth = {
     validUsername: function (u) { return /^[a-z0-9._-]{3,30}$/.test(String(u || '').trim().toLowerCase()); },
+    validEmail: function (m) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(m || '').trim()) && String(m).length <= 120; },
     validPassword: function (p) { return /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{10,}$/.test(String(p || '')); },
-    signIn: function (username, password) {
-      return authPost('/token?grant_type=password', { email: emailFor(username), password: password }, false)
+    signIn: function (email, password) {
+      return authPost('/token?grant_type=password', { email: emailFor(email), password: password }, false)
         .then(function (s) { setSession(s); return s; });
     },
     // Checks a password without touching the stored session (used before a password change).
-    verify: function (username, password) {
-      return authPost('/token?grant_type=password', { email: emailFor(username), password: password }, false)
+    verify: function (email, password) {
+      return authPost('/token?grant_type=password', { email: emailFor(email), password: password }, false)
         .then(function (s) {
           // end the session this check created
           return fetch(base + '/auth/v1/logout?scope=local', { method: 'POST', headers: { 'apikey': apikey, 'Authorization': 'Bearer ' + s.access_token } })
             .catch(function () {}).then(function () { return true; });
         });
     },
-    signUp: function (username, password, displayName) {
-      return authPost('/signup', { email: emailFor(username), password: password,
+    signUp: function (email, password, username, displayName) {
+      return authPost('/signup', { email: emailFor(email), password: password,
         data: { username: String(username).trim().toLowerCase(), display_name: String(displayName || '').trim() } }, false)
         .then(function (s) { if (s && s.access_token) setSession(s); return s; });
     },

@@ -39,7 +39,7 @@
       rows.forEach(function (u) {
         var card = el('div', { class: 'card tight row between' },
           el('div', { class: 'grow' }, el('div', null, el('strong', { text: u.display_name }), ' ', el('span', { class: 'faint mono', text: '@' + u.username })),
-            el('div', { class: 'muted', text: 'Requested ' + Core.dateTime(u.created_at) })),
+            el('div', { class: 'muted', text: (u.email ? u.email + ' - ' : '') + 'Requested ' + Core.dateTime(u.created_at) })),
           el('div', { class: 'row' },
             el('button', { class: 'btn primary', type: 'button', text: 'Approve', on: { click: function (e) { var btn = e.currentTarget;
               Core.busy(btn, function () { return Api.rpc('core_admin_set_status', { p_user: u.id, p_status: 'active' }); })
@@ -67,14 +67,14 @@
   function renderUsers() {
     var host = $('#users'); Core.clear(host);
     var q = $('#user-filter').value.trim().toLowerCase();
-    var rows = usersAll.filter(function (u) { return !q || u.username.indexOf(q) >= 0 || u.display_name.toLowerCase().indexOf(q) >= 0; });
+    var rows = usersAll.filter(function (u) { return !q || u.username.indexOf(q) >= 0 || u.display_name.toLowerCase().indexOf(q) >= 0 || (u.email || '').indexOf(q) >= 0; });
     if (!rows.length) { host.appendChild(el('p', { class: 'state', text: usersAll.length ? 'No match.' : 'No users yet.' })); return; }
     var table = el('table', null, el('thead', null, el('tr', null, el('th', { text: 'User' }), el('th', { text: 'Status' }), el('th', { text: 'Tiles' }), el('th', { text: 'Last sign-in' }), el('th'))));
     var body = el('tbody');
     rows.forEach(function (u) {
       var status = el('span', { class: 'badge ' + (u.status === 'active' ? 'success' : u.status === 'pending' ? 'warning' : 'danger'), text: u.status });
       var tr = el('tr', null,
-        el('td', null, el('div', null, el('strong', { text: u.display_name }), u.is_super ? el('span', { class: 'badge brand', text: 'super' }) : null), el('div', { class: 'faint mono', text: '@' + u.username })),
+        el('td', null, el('div', null, el('strong', { text: u.display_name }), u.is_super ? el('span', { class: 'badge brand', text: 'super' }) : null), el('div', { class: 'faint mono', text: '@' + u.username + (u.email ? ' - ' + u.email : '') })),
         el('td', null, status),
         el('td', null, u.tiles.length ? u.tiles.join(', ') : el('span', { class: 'faint', text: '-' })),
         el('td', { text: u.last_sign_in ? Core.dateTime(u.last_sign_in) : '-' }));

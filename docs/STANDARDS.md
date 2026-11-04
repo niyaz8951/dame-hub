@@ -3,7 +3,7 @@
 Kept in the admin repo as `docs/STANDARDS.md`. Every DAME Claude project reads it, together with `docs/SECURITY.md`, before work. Security wins over everything. If a tile's own instructions disagree with this file, this file wins unless the owner decided otherwise for that tile.
 
 ## 1. What DAME is
-An internal team site. Users sign in with a username, wait for approval, and see only the tiles they were given. Each tile is a separate repo, run by its own team and Claude project; the admin repo provides login, theme and permissions to all of them. Everything starts fresh; no AI for now.
+An internal team site. Users sign in with their email address and password, wait for approval, and see only the tiles they were given. Each tile is a separate repo, run by its own team and Claude project; the admin repo provides login, theme and permissions to all of them. Everything starts fresh; no AI for now.
 
 ## 2. Architecture
 
@@ -28,7 +28,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - **Who runs what:** the owner runs the GitHub account, `dame-hub` and Supabase, and applies every SQL file. Each tile repo has its team as collaborators with write access to that repo only. A tile id never reuses the name of another repo in the account.
 
 ## 3. Users and roles
-- Username: 3-30 characters, `a-z 0-9 . _ -`, lower case, unique. Display name. Nothing else personal.
+- Account = the user's own email address + password (Supabase Auth). Username: 3-30 characters, `a-z 0-9 . _ -`, lower case, unique; shown everywhere instead of the address. Display name. Nothing else personal.
 - Status: `pending` (requested), `active`, `disabled`. Only `active` users get anything.
 - **Super user** (the owner): approves accounts, creates and switches tiles, names tile admins, sees the audit.
 - **Tile admin:** gives and removes access and rights for his tile only.

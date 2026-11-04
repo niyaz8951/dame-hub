@@ -23,7 +23,7 @@ begin
     perform set_config('request.jwt.claims', '', true); perform set_config('role', 'anon', true); return;
   end if;
   select id into v_id from t_ids where k = p_key;
-  perform set_config('request.jwt.claims', json_build_object('sub', v_id, 'session_id', v_sid, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', v_id, 'session_id', v_sid, 'role', 'authenticated', 'email', (select email from auth.users where id = v_id))::text, true);
   perform set_config('role', 'authenticated', true);
 end $$;
 
@@ -45,9 +45,10 @@ declare v jsonb; n int;
 begin
   -- ---- sign-up trigger
   perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('bad@example.com', '{"username":"Bad Name!"}')$q$, 'INVALID:username');
-  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('someone@gmail.com', '{"username":"someone"}')$q$, 'INVALID:username');
-  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('t.user@example.com', '{"username":"t.user"}')$q$, 'duplicate key value violates unique constraint "users_email_key"');
-  select count(*) into n from core.profiles where username like 't.%' and status = 'pending'; if n <> 6 then raise exception 'profiles not pending'; end if;
+  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('someone@gmail.com', '{"username":"t.user"}')$q$, 'TAKEN:username');
+  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('t.user@example.com', '{"username":"other"}')$q$, 'duplicate key value violates unique constraint "users_email_key"');
+  insert into auth.users (email, raw_user_meta_data) values ('someone@gmail.com', '{"username":"t.gmail"}'); -- any real address works
+  select count(*) into n from core.profiles where username like 't.%' and status = 'pending'; if n <> 7 then raise exception 'profiles not pending'; end if;
   raise notice 'sign-up trigger ok';
 
   -- ---- anon may call core_site_info and nothing else
@@ -80,6 +81,7 @@ begin
   perform pg_temp.expect_error(format('select public.core_admin_set_status(%L, ''disabled'')', (select id from t_ids where k = 't.super')), 'INVALID:user');
   perform pg_temp.expect_error(format('select public.core_admin_set_status(%L, ''gone'')', (select id from t_ids where k = 't.user')), 'INVALID:status');
   select count(*) into n from public.core_admin_users('pending'); if n < 1 then raise exception 'pending list'; end if;
+  select count(*) into n from public.core_admin_users(null) where email like '%@%'; if n < 6 then raise exception 'emails in admin list'; end if;
   raise notice 'approval ok';
 
   -- ---- tiles
@@ -161,6 +163,7 @@ begin
   perform pg_temp.expect_error('select public.core_me()', 'SIGNED_OUT');  -- not yet started
   perform public.core_session_start();
   select public.core_me() into v; if v ->> 'username' <> 't.user' then raise exception 'second session'; end if;
+  if v ->> 'email' is distinct from 't.user@example.com' then raise exception 'email in me: %', v; end if;
   reset role;
   -- the 12-hour limit
   update core.profiles set session_started_at = now() - interval '13 hours' where username = 't.user';

@@ -23,7 +23,7 @@ function sql(q) {
 }
 const lit = (s) => '$q$' + String(s).replace(/\$q\$/g, '') + '$q$';
 function b64(o) { return Buffer.from(JSON.stringify(o)).toString('base64url'); }
-function token(user_id, session_id) { return 'x.' + b64({ sub: user_id, session_id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.x'; }
+function token(user_id, session_id) { const e = sql(`select email from auth.users where id = ${lit(user_id)}`); return 'x.' + b64({ sub: user_id, session_id, role: 'authenticated', email: e.ok ? e.out : null, exp: Math.floor(Date.now() / 1000) + 3600 }) + '.x'; }
 function claims(req) {
   const a = req.headers.authorization || '';
   const m = /^Bearer x\.([^.]+)\.x$/.exec(a);

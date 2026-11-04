@@ -42,34 +42,35 @@
 
   $('#signin').addEventListener('submit', function (e) {
     e.preventDefault();
-    var user = $('#si-user'), pass = $('#si-pass'), err = $('#si-error'), btn = e.target.querySelector('button[type=submit]');
-    var u = user.value.trim().toLowerCase();
+    var email = $('#si-email'), pass = $('#si-pass'), err = $('#si-error'), btn = e.target.querySelector('button[type=submit]');
+    var m = email.value.trim().toLowerCase();
     setError(err, '');
-    mark(user, !u); mark(pass, !pass.value);
-    if (!u || !pass.value) { setError(err, 'Enter your username and password.'); return; }
-    if (!Api.auth.validUsername(u)) { setError(err, Api.messages.BAD_LOGIN); return; }
+    mark(email, !m); mark(pass, !pass.value);
+    if (!m || !pass.value) { setError(err, 'Enter your email and password.'); return; }
+    if (!Api.auth.validEmail(m)) { setError(err, Api.messages.BAD_LOGIN); return; }
     Core.busy(btn, function () {
-      return Api.auth.signIn(u, pass.value).then(afterSignIn);
+      return Api.auth.signIn(m, pass.value).then(afterSignIn);
     }).catch(function (ex) { setError(err, Api.errorMessage(ex)); pass.value = ''; pass.focus(); });
   });
 
   $('#request').addEventListener('submit', function (e) {
     e.preventDefault();
-    var user = $('#rq-user'), name = $('#rq-name'), pass = $('#rq-pass'), pass2 = $('#rq-pass2'), err = $('#rq-error');
+    var email = $('#rq-email'), user = $('#rq-user'), name = $('#rq-name'), pass = $('#rq-pass'), pass2 = $('#rq-pass2'), err = $('#rq-error');
     var btn = e.target.querySelector('button[type=submit]');
-    var u = user.value.trim().toLowerCase();
+    var m = email.value.trim().toLowerCase(), u = user.value.trim().toLowerCase();
     setError(err, '');
     var problems = [];
+    mark(email, !Api.auth.validEmail(m)); if (!Api.auth.validEmail(m)) problems.push('Enter a valid email address.');
     mark(user, !Api.auth.validUsername(u)); if (!Api.auth.validUsername(u)) problems.push('Username: 3 to 30 characters, lower-case letters, digits, dot, dash, underscore.');
     mark(name, !name.value.trim()); if (!name.value.trim()) problems.push('Enter a display name.');
     mark(pass, !Api.auth.validPassword(pass.value)); if (!Api.auth.validPassword(pass.value)) problems.push(Api.messages.WEAK_PASSWORD);
     mark(pass2, pass.value !== pass2.value); if (pass.value !== pass2.value) problems.push('The two passwords differ.');
     if (problems.length) { setError(err, problems[0]); return; }
     Core.busy(btn, function () {
-      return Api.auth.signUp(u, pass.value, name.value.trim()).then(function (s) {
+      return Api.auth.signUp(m, pass.value, u, name.value.trim()).then(function (s) {
         if (!s || !s.access_token) {
           // sign-up succeeded but returned no session (confirm-email left on): sign in explicitly
-          return Api.auth.signIn(u, pass.value).then(afterSignIn);
+          return Api.auth.signIn(m, pass.value).then(afterSignIn);
         }
         return afterSignIn();
       });

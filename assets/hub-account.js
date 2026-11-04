@@ -5,7 +5,7 @@
   function setError(box, msg) { box.textContent = msg || ''; box.hidden = !msg; }
 
   Core.requireLogin({ page: 'Account' }).then(function (me) {
-    $('#username').textContent = '@' + me.username;
+    $('#username').textContent = '@' + me.username + (me.email ? ' (' + me.email + ')' : '');
     $('#display-name').value = me.display_name;
     var mustChange = !!me.must_change_password || Core.param('change') === '1';
     if (me.must_change_password) {
@@ -36,7 +36,7 @@
       if (n1 !== n2) { setError(err, 'The two passwords differ.'); return; }
       if (n1 === cur) { setError(err, 'The new password is the same as the current one.'); return; }
       Core.busy(btn, function () {
-        var check = me.must_change_password ? Promise.resolve() : Api.auth.verify(me.username, cur).catch(function () { throw new Api.Error('BAD_CURRENT', 'The current password is wrong.'); });
+        var check = me.must_change_password ? Promise.resolve() : Api.auth.verify(me.email, cur).catch(function () { throw new Api.Error('BAD_CURRENT', 'The current password is wrong.'); });
         return check
           .then(function () { return Api.auth.updatePassword(n1); })
           .then(function () { return Api.rpc('core_password_changed'); })

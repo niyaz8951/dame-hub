@@ -1,5 +1,5 @@
 -- DAME demo accounts. STAGING ONLY - never run on the live project.
--- Creates the tile 'demo' and four accounts, password DemoPass2026 for all:
+-- Creates the tile 'demo' and four accounts, <name>@example.com, password DemoPass2026 for all:
 --   demo_admin   active, tile admin of 'demo'
 --   demo_user    active, has 'demo' with the right 'edit'
 --   demo_none    active, no tile
