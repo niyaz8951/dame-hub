@@ -17,11 +17,20 @@
 <body>
 <header id="topbar"></header>
 <main>
-  <div class="page-head">
-    <h1 id="hello">Dashboard</h1>
+  <section class="hero">
+    <div>
+      <p class="kicker" id="today"></p>
+      <h1 id="hello">Welcome</h1>
+      <p class="sub" id="sub">Your tools, in one place.</p>
+    </div>
     <div class="row" id="head-actions"></div>
+  </section>
+  <h2 class="section-title">Your tiles</h2>
+  <div id="tiles" class="tiles" aria-busy="true">
+    <div class="tile skeleton" aria-hidden="true"><span class="sk ic"></span><span class="grow"><span class="sk l1"></span><span class="sk l2"></span></span></div>
+    <div class="tile skeleton" aria-hidden="true"><span class="sk ic"></span><span class="grow"><span class="sk l1"></span><span class="sk l2"></span></span></div>
+    <div class="tile skeleton" aria-hidden="true"><span class="sk ic"></span><span class="grow"><span class="sk l1"></span><span class="sk l2"></span></span></div>
   </div>
-  <div id="tiles" class="tiles"></div>
   <div id="empty" class="state" hidden>
     <h2>No tiles yet</h2>
     <p>Your account is active but no tile has been given to you. Ask the person who runs the tile you need.</p>

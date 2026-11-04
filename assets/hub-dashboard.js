@@ -2,12 +2,27 @@
 (function () {
   'use strict';
   var $ = Core.$, el = Core.el;
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function greeting() {
+    var h = new Date().getHours();
+    return h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  }
+
   Core.requireLogin().then(function (me) {
-    $('#hello').textContent = 'Hello, ' + (me.display_name || me.username);
-    if (me.is_super) $('#head-actions').appendChild(el('a', { class: 'btn', href: Core.CORE + '/admin.html', text: 'Admin' }));
+    var name = me.display_name || me.username;
+    var now = new Date();
+    $('#today').textContent = DAYS[now.getDay()] + ', ' + Core.date(now);
+    $('#hello').textContent = greeting() + ', ' + name.split(/\s+/)[0];
+    if (me.is_super) {
+      $('#head-actions').appendChild(el('a', { class: 'btn glass', href: Core.CORE + '/admin.html' },
+        el('span', { class: 'ico i-gear', 'aria-hidden': 'true' }), 'Admin'));
+    }
     var grid = $('#tiles');
     return Api.rpc('core_my_tiles').then(function (tiles) {
       Core.clear(grid);
+      grid.removeAttribute('aria-busy');
+      $('#sub').textContent = tiles.length === 1 ? '1 tile ready for you.' : tiles.length ? tiles.length + ' tiles ready for you.' : 'Your tools, in one place.';
       if (!tiles.length) { $('#empty').hidden = false; return; }
       tiles.forEach(function (t) {
         var icon = Core.ICONS.indexOf(t.icon) >= 0 ? t.icon : 'tile';
@@ -20,5 +35,8 @@
         grid.appendChild(card);
       });
     });
-  }).catch(function (err) { Core.showError(err); });
+  }).catch(function (err) {
+    var grid = $('#tiles'); if (grid) { Core.clear(grid); grid.removeAttribute('aria-busy'); }
+    Core.showError(err);
+  });
 })();

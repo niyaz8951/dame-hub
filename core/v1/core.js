@@ -48,14 +48,47 @@ window.Core = (function () {
     if (t === 'day') return false;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
-  function themeToggle() {
+  function themeSync() {
+    var b = $('#theme-btn'); if (!b) return;
+    var night = themeIsNight();
+    b.setAttribute('data-night', String(night));
+    b.setAttribute('aria-label', night ? 'Switch to day mode' : 'Switch to night mode');
+    b.title = night ? 'Day mode' : 'Night mode';
+  }
+  // Switches day <-> night. With a click event, the new theme spreads in a circle from the button.
+  function themeToggle(ev) {
     var next = themeIsNight() ? 'day' : 'night';
-    try { localStorage.setItem(cfg.THEME_KEY, next); } catch (e) {}
-    themeApply(next);
-    var b = $('#theme-btn'); if (b) b.textContent = themeIsNight() ? 'Day' : 'Night';
+    function apply() {
+      try { localStorage.setItem(cfg.THEME_KEY, next); } catch (e) {}
+      themeApply(next); themeSync();
+    }
+    var root = document.documentElement;
+    var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (still) { apply(); return; }
+    if (!document.startViewTransition) {
+      root.classList.add('theme-fade'); apply();
+      setTimeout(function () { root.classList.remove('theme-fade'); }, 400);
+      return;
+    }
+    var x = window.innerWidth - 40, y = 30;
+    var src = ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect ? ev.currentTarget.getBoundingClientRect() : null;
+    if (src) { x = src.left + src.width / 2; y = src.top + src.height / 2; }
+    var r = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    var t = document.startViewTransition(apply);
+    t.ready.then(function () {
+      root.animate({ clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + r + 'px at ' + x + 'px ' + y + 'px)'] },
+        { duration: 600, easing: 'cubic-bezier(.2,.8,.2,1)', pseudoElement: '::view-transition-new(root)' });
+    }).catch(function () {});
   }
   themeApply(themeGet());
+  // Following the device: re-sync the switch when the device changes mode.
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onMq = function () { if (themeGet() === 'auto') themeSync(); };
+    if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
+  }
   Core.themeToggle = themeToggle;
+  Core.isNight = themeIsNight;
 
   // ---------- helpers ----------
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -73,6 +106,12 @@ window.Core = (function () {
     return Core.date(d) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   };
   Core.errorMessage = function (err) { return Api.errorMessage(err); };
+  // Up to two initials for an avatar: "Niyaz Khan" -> "NK", "niyaz" -> "N".
+  Core.initials = function (name) {
+    var parts = String(name || '').trim().split(/[\s._-]+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts[0].charAt(0) + (parts.length > 1 ? parts[parts.length - 1].charAt(0) : '')).toUpperCase();
+  };
   Core.setTitle = function (text) { document.title = (text ? text + ' - ' : '') + cfg.SITE_NAME; };
   Core.download = function (name, blob) {
     var url = URL.createObjectURL(blob);
@@ -160,8 +199,9 @@ window.Core = (function () {
     if (!bar) return;
     clear(bar);
     var inner = el('div', { class: 'inner' });
+    var here = Core.tile ? Core.tile.name : Core.pageName;
     inner.appendChild(el('a', { class: 'home', href: CORE + '/dashboard.html', 'aria-label': cfg.SITE_NAME + ' dashboard' },
-      el('span', { class: 'mark', 'aria-hidden': 'true' }), el('span', { text: cfg.SITE_NAME })));
+      el('span', { class: 'mark', 'aria-hidden': 'true' }), el('span', { class: 'site' + (here ? '' : ' only'), text: cfg.SITE_NAME })));
     if (Core.tile) {
       inner.appendChild(el('span', { class: 'crumb', 'aria-hidden': 'true', text: '/' }));
       inner.appendChild(el('span', { class: 'here', text: Core.tile.name }));
@@ -170,24 +210,36 @@ window.Core = (function () {
       inner.appendChild(el('span', { class: 'here', text: Core.pageName }));
     }
     inner.appendChild(el('span', { class: 'spacer' }));
-    inner.appendChild(el('button', { id: 'theme-btn', class: 'btn ghost small', type: 'button', text: themeIsNight() ? 'Day' : 'Night', on: { click: themeToggle } }));
+    var actions = el('div', { class: 'actions' });
+    actions.appendChild(el('button', { id: 'theme-btn', class: 'theme-toggle', type: 'button', on: { click: themeToggle } }));
+    inner.appendChild(actions);
     if (me) {
+      var name = me.display_name || me.username;
       var menu = el('div', { class: 'menu' });
       var list = el('div', { class: 'menu-list', hidden: true });
-      var btn = el('button', { class: 'btn ghost small who', type: 'button', text: me.display_name || me.username, 'aria-haspopup': 'true', 'aria-expanded': 'false',
-        on: { click: function (e) { e.stopPropagation(); list.hidden = !list.hidden; btn.setAttribute('aria-expanded', String(!list.hidden)); } } });
-      list.appendChild(el('div', { class: 'head', text: '@' + me.username }));
+      var btn = el('button', { class: 'btn ghost small who', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Account menu for ' + name,
+        on: { click: function (e) { e.stopPropagation(); list.hidden = !list.hidden; btn.setAttribute('aria-expanded', String(!list.hidden)); } } },
+        el('span', { class: 'avatar', 'aria-hidden': 'true', text: Core.initials(name) }),
+        el('span', { class: 'who-name', text: name }),
+        el('span', { class: 'who-chev', 'aria-hidden': 'true' }));
+      list.appendChild(el('div', { class: 'menu-head' },
+        el('span', { class: 'avatar lg', 'aria-hidden': 'true', text: Core.initials(name) }),
+        el('span', { class: 'grow' }, el('span', { class: 'n', text: name }), el('span', { class: 'u', text: '@' + me.username }))));
+      list.appendChild(el('div', { class: 'sep' }));
       list.appendChild(el('a', { href: CORE + '/dashboard.html', text: 'Dashboard' }));
       if (Core.tile && (me.tile_admin || me.is_super)) list.appendChild(el('a', { href: CORE + '/access.html?tile=' + encodeURIComponent(Core.tile.id), text: 'Access to ' + Core.tile.name }));
       if (me.is_super) list.appendChild(el('a', { href: CORE + '/admin.html', text: 'Admin' }));
       list.appendChild(el('a', { href: CORE + '/account.html', text: 'Account' }));
       list.appendChild(el('div', { class: 'sep' }));
       list.appendChild(el('button', { type: 'button', text: 'Sign out', on: { click: function () { Core.signOut(); } } }));
-      document.addEventListener('click', function () { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
+      var closeMenu = function () { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+      document.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !list.hidden) { closeMenu(); btn.focus(); } });
       menu.appendChild(btn); menu.appendChild(list);
-      inner.appendChild(menu);
+      actions.appendChild(menu);
     }
     bar.appendChild(inner);
+    themeSync();
   }
   Core.buildTopbar = buildTopbar;
 

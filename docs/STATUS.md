@@ -35,6 +35,10 @@ Chats that start with **DAME-ADMIN** continue from here.
 - The Claude project "HVAC Engineering" becomes "DAME - HVAC Notes" (instructions from the `docs/NEW-TILE.md` template, filled by the admin project).
 - History of `HVAC` checked (95 commits): no plain content, key or password was ever committed; only ciphertext, a wrapped key and empty `nav.json` files.
 
+## Look refresh (2026-11-04, owner: "more immersive, modern; day/night as an icon")
+- Decided without asking: sun/moon icon switch, avatar menu, hero band on the dashboard (greeting by time of day, date, tile count, Admin as a glass button), skeleton tiles while loading, brand block on the sign-in page, segmented tabs, rounder cards and sheets, pill toasts. Colours stay Daikin Middle East; system fonts only; no new outside source (CSP unchanged).
+- Checked: day and night, 1280 px and 390 px (no sideways scroll), menu, theme switch, admin page.
+
 ## SQL applied
 | File | `dame-hub` project |
 |---|---|
@@ -55,6 +59,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 6. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
+- 2026-11-04 - **Look refresh (core/v1, no breaking change).** Day/night is now a round sun/moon icon button with a circular reveal; account menu is an avatar + name pill (also on phones, where it used to be hidden); soft brand glow behind every page (`body` is transparent, `html` carries `--bg`); primary buttons use the brand gradient; `.tabs` is a segmented control; tiles have gradient icons, a hover arrow and a staggered entrance. New tokens and classes in `core/v1/README.md` (Theme). Tiles change nothing; a tile that set its own `body` background should drop it so the glow shows. Icon classes now also work without `.icon` (`.i-<name>`).
 - 2026-11-04 - Rule book: an existing site may join as a tile (`docs/NEW-TILE.md`, "Bringing an existing site in"); `docs/SECURITY.md` section 1 allows a private **source repo** for a tile's authoring copy and says shared-password encryption in a public repo is not allowed. `docs/STANDARDS.md` section 1 and the project template wording changed to match.
 - 2026-11-04 - `core_me()` also returns `email` (the caller's own address). Tiles keep showing `username`; never show or store the address in a tile.
 - 2026-11-04 - Site is named **DAME HUB**; theme now carries the Daikin Middle East palette (`--brand #0097E0`, night `#2FB0EC`), the layers-glyph mark and favicons in `core/v1/icons/`. Token names unchanged; `--link`, `--focus`, `--glass`, `--scrim`, `--ease`, `--brand-sky`, `--brand-navy` added. Pages add `<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg">` and the apple-touch-icon line (see `core/v1/README.md`).
