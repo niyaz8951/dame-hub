@@ -29,7 +29,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 ## Decisions 2026-11-04 (tile `hvac-notes`)
 - The owner's existing repos may join as tiles when he decides (the original idea: several repos, linked as tiles on the main site). The "nothing is imported" rule now applies to users and accounts only. Pattern in `docs/NEW-TILE.md`, "Bringing an existing site in".
 - First case: `HVAC` (HVAC Notes reader) -> tile **`hvac-notes`**, a new clean public repo. Its content (pages, images, index) moves to schema `hvac_notes` and private bucket `hvac-notes`. Per-user highlights, notes and reading positions move to the database. The shared-password encryption goes.
-- `HVAC` becomes the tile's **source repo** once the tile is live: private, Pages off, owner only, plain authoring copy. The tile's Publish page (right `edit`) uploads it to Supabase through the owner's session.
+- No source repo for this tile (owner, 2026-11-04): `HVAC` is **deleted** after cut-over, once the tile is checked and two offline backups are kept. Supabase is the only home of the content. The Publish page (right `edit`) uploads zips of pages and exports all pages as a zip (authoring copy and backup). Claude sends new or changed pages as a zip in the chat.
 - **Online only**: no offline copy of the content on devices (no service worker cache of tile data).
 - Videos open on YouTube (no iframe); content widgets become tile code.
 - The Claude project "HVAC Engineering" becomes "DAME - HVAC Notes" (instructions from the `docs/NEW-TILE.md` template, filled by the admin project).
@@ -52,7 +52,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 5. **Owner, now:** turn off GitHub Pages on `QuickTools` (it loads cdnjs and Google Fonts on the DAME address, `docs/SECURITY.md` section 5). Also turn it off on `RECKON`, `Thinkneering` and `dame-tools-hub` unless one is needed live; a live one must load no outside code.
-6. **Tile `hvac-notes`:** owner creates repo `hvac-notes` (`docs/NEW-TILE.md` steps 2-5, right `edit`, tile off), converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
+6. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
 - 2026-11-04 - Rule book: an existing site may join as a tile (`docs/NEW-TILE.md`, "Bringing an existing site in"); `docs/SECURITY.md` section 1 allows a private **source repo** for a tile's authoring copy and says shared-password encryption in a public repo is not allowed. `docs/STANDARDS.md` section 1 and the project template wording changed to match.
