@@ -74,7 +74,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 5. **Owner, now:** turn off GitHub Pages on `QuickTools` (it loads cdnjs and Google Fonts on the DAME address, `docs/SECURITY.md` section 5). Also turn it off on `RECKON`, `Thinkneering` and `dame-tools-hub` unless one is needed live; a live one must load no outside code.
-6. **Tools tile:** Admin > Tiles: make sure a tile with id **`tools`** exists (name Tools, icon `tools`, no rights), pick its colour, switch it on, give access. Open `/dame-hub/tools/` on a laptop and a phone and try each tool with a real file. If the registered tile has another id, say so: `INSIDE_CORE` and the folder name must match it.
+6. **Tools tile:** Claude project "DAME - Tools" (instructions in `docs/tiles/tools-project-instructions.md`, delivered 2026-11-04) takes over the tile's features from here; this project keeps the core and the e2e step. Admin > Tiles: make sure a tile with id **`tools`** exists (name Tools, icon `tools`, no rights), pick its colour, switch it on, give access. Open `/dame-hub/tools/` on a laptop and a phone and try each tool with a real file. If the registered tile has another id, say so: `INSIDE_CORE` and the folder name must match it.
 7. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
