@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-loading>
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin - DAME</title>
+<link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/mark.svg" type="image/svg+xml">
+<script src="/dame-hub/core/v1/config.js" defer></script>
+<script src="/dame-hub/core/v1/api.js" defer></script>
+<script src="/dame-hub/core/v1/core.js" defer></script>
+<script src="/dame-hub/assets/hub-access.js" defer></script>
+<script src="/dame-hub/assets/hub-admin.js" defer></script>
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <div class="page-head">
+    <h1>Admin</h1>
+  </div>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" aria-selected="true" data-tab="requests">Requests<span class="badge warning count" id="count-requests" hidden></span></button>
+    <button type="button" role="tab" aria-selected="false" data-tab="users">Users</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="tiles">Tiles</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="audit">Audit</button>
+  </div>
+
+  <section id="tab-requests">
+    <div id="requests"></div>
+  </section>
+
+  <section id="tab-users" hidden>
+    <div class="row between">
+      <input id="user-filter" placeholder="Filter by username or name" aria-label="Filter users">
+    </div>
+    <div id="users" class="table-wrap"></div>
+  </section>
+
+  <section id="tab-tiles" hidden>
+    <div class="row between">
+      <p class="muted grow">A tile is a sibling repo served at <code>/&lt;tile-id&gt;/</code>. Register it here, then give access to users; it stays hidden until switched on.</p>
+      <button class="btn primary" type="button" id="tile-new">New tile</button>
+    </div>
+    <div id="tiles" class="table-wrap"></div>
+  </section>
+
+  <section id="tab-audit" hidden>
+    <div class="row">
+      <input id="audit-user" placeholder="username" aria-label="Filter by username">
+      <input id="audit-tile" placeholder="tile id" aria-label="Filter by tile">
+      <button class="btn" type="button" id="audit-go">Filter</button>
+    </div>
+    <div id="audit" class="table-wrap"></div>
+    <div class="row end"><button class="btn" type="button" id="audit-more" hidden>Load more</button></div>
+  </section>
+</main>
+</body>
+</html>

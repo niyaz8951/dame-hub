@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-loading>
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - DAME</title>
+<link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/mark.svg" type="image/svg+xml">
+<script src="/dame-hub/core/v1/config.js" defer></script>
+<script src="/dame-hub/core/v1/api.js" defer></script>
+<script src="/dame-hub/core/v1/core.js" defer></script>
+<script src="/dame-hub/assets/hub-login.js" defer></script>
+</head>
+<body>
+<header id="topbar"></header>
+<main class="narrow">
+  <div class="card" id="box">
+    <div id="pane-signin">
+      <h1>Sign in</h1>
+      <form id="signin" novalidate>
+        <div class="field">
+          <label for="si-user">Username</label>
+          <input id="si-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        </div>
+        <div class="field">
+          <label for="si-pass">Password</label>
+          <input id="si-pass" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <p class="notice danger" id="si-error" hidden></p>
+        <button class="btn primary block" type="submit">Sign in</button>
+      </form>
+      <hr>
+      <p class="muted">No account yet? <a href="#request" id="to-request">Request access</a></p>
+    </div>
+
+    <div id="pane-request" hidden>
+      <h1>Request access</h1>
+      <p class="muted">Choose a username and a password. The site admin approves new accounts; until then you will see a waiting message.</p>
+      <form id="request" novalidate>
+        <div class="field">
+          <label for="rq-user">Username</label>
+          <input id="rq-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="30">
+          <span class="hint">3 to 30 characters: lower-case letters, digits, dot, dash, underscore.</span>
+        </div>
+        <div class="field">
+          <label for="rq-name">Display name</label>
+          <input id="rq-name" name="display_name" autocomplete="name" required maxlength="60">
+          <span class="hint">How your name appears to others.</span>
+        </div>
+        <div class="field">
+          <label for="rq-pass">Password</label>
+          <input id="rq-pass" name="password" type="password" autocomplete="new-password" required>
+          <span class="hint">At least 10 characters with lower case, upper case and a digit.</span>
+        </div>
+        <div class="field">
+          <label for="rq-pass2">Password again</label>
+          <input id="rq-pass2" name="password2" type="password" autocomplete="new-password" required>
+        </div>
+        <p class="notice danger" id="rq-error" hidden></p>
+        <button class="btn primary block" type="submit">Request access</button>
+      </form>
+      <hr>
+      <p class="muted">Have an account? <a href="#signin" id="to-signin">Sign in</a></p>
+    </div>
+
+    <div id="pane-pending" hidden>
+      <div class="state">
+        <h2>Waiting for approval</h2>
+        <p>Your request was received. The site admin will approve it; until then there is nothing to see here.</p>
+        <button class="btn" type="button" id="pending-signout">Sign out</button>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

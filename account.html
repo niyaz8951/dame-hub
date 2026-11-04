@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-loading>
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account - DAME</title>
+<link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/mark.svg" type="image/svg+xml">
+<script src="/dame-hub/core/v1/config.js" defer></script>
+<script src="/dame-hub/core/v1/api.js" defer></script>
+<script src="/dame-hub/core/v1/core.js" defer></script>
+<script src="/dame-hub/assets/hub-account.js" defer></script>
+</head>
+<body>
+<header id="topbar"></header>
+<main class="narrow">
+  <h1>Account</h1>
+  <p class="notice warning" id="must-change" hidden>A temporary password was set for you. Choose a new one to continue.</p>
+
+  <div class="card">
+    <h2>Name</h2>
+    <p class="muted">Signed in as <span class="mono" id="username"></span></p>
+    <form id="name-form" novalidate>
+      <div class="field">
+        <label for="display-name">Display name</label>
+        <input id="display-name" maxlength="60" autocomplete="name" required>
+      </div>
+      <p class="notice danger" id="name-error" hidden></p>
+      <button class="btn" type="submit">Save name</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Password</h2>
+    <form id="pass-form" novalidate>
+      <div class="field" id="current-field">
+        <label for="current">Current password</label>
+        <input id="current" type="password" autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="new1">New password</label>
+        <input id="new1" type="password" autocomplete="new-password" required>
+        <span class="hint">At least 10 characters with lower case, upper case and a digit.</span>
+      </div>
+      <div class="field">
+        <label for="new2">New password again</label>
+        <input id="new2" type="password" autocomplete="new-password" required>
+      </div>
+      <p class="notice danger" id="pass-error" hidden></p>
+      <button class="btn primary" type="submit">Change password</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Appearance</h2>
+    <p class="muted">Day or night follows your device; the button in the top bar overrides it.</p>
+  </div>
+</main>
+</body>
+</html>
