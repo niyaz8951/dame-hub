@@ -4,7 +4,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 
 ## Environment
 - GitHub `niyaz8951/dame-hub` (Pages, `main`, root). Tiles: sibling repos, `docs/TILES.md`.
-- Supabase: **one project, `dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`), used for testing and live until the team starts using the site. `core/v1/config.js` already has a `STAGING` slot (today = LIVE); `docs/RUNBOOK.md` "Add a staging project" says what changes when it exists. Until then "staging" in the rule book means this project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@example.com'`).
+- Supabase: live project **`dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`). A staging project `dame-staging` was created by the owner on 2026-11-04 (second Free slot); `core/v1/config.js` `STAGING` still equals `LIVE` until its URL and publishable key arrive (see Next, item 0). Until then "staging" in the rule book means the live project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@example.com'`).
 
 ## Built (step 1, 2026-11-04)
 - `docs/`: SECURITY, STANDARDS, TILE-CONTRACT, NEW-TILE, MOVE-ACCOUNT (the rule book), STATUS, TILES, RUNBOOK.
@@ -54,6 +54,11 @@ Chats that start with **DAME-ADMIN** continue from here.
 - Checked: `dev/test/run.sh` green (core tests, demo tests, security check empty, browser run incl. the new "tools tile" step: dashboard link, home and the four pages at 1100 px and 390 px, topbar, accent, no sideways scroll, no console errors, a user without the tile refused). Screenshots in `dev/test/out/`.
 - Decided without asking: tile has no rights and no schema; its colour is whatever the owner sets (test used violet); page heads stack (eyebrow, title, lede) under the core topbar; the tile is listed in `docs/TILES.md` as run by the owner and this project.
 
+## Projects tile (2026-11-04, owner: "register tile `projects`; data stays in the one DAME database")
+- Registered: id `projects`, name Projects, repo `niyaz8951/projects` (created by the owner), team and tile admin the owner for now, Claude project "DAME - Projects" (instructions in `docs/tiles/projects-project-instructions.md`, chats start `DAME-PROJECTS`). Order after Tools, colour to be chosen later, **off** until its first version is checked.
+- **Decision (owner):** Projects keeps its data in schema `projects` and private bucket `projects` inside the one DAME database, **not** a separate Supabase project: one sign-in, rights, audit and `core.security_check()` only work inside one project, and the schema and bucket already isolate it. If it outgrows the Free limits, the path is Pro on `dame-hub`, not a second project. The second Free slot is the staging project.
+- Scope, one step at a time, each checked before the next: (1) project register - list, create, open; (2) maps - project locations; (3) compliance review inside a project; (4) product options inside a project. The old `Thinkneering` `tools/projects` tool is read for features only; no code, data, library or layout is copied.
+
 ## SQL applied
 | File | `dame-hub` project |
 |---|---|
@@ -67,15 +72,19 @@ Chats that start with **DAME-ADMIN** continue from here.
 | `demo/db/demo/001_init.sql` | - |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
+**Fresh project (staging), in this order:** `001_init`, `004_email_signin`, `005_owner_users`, `006_display_names`, `007_tile_accent`, `demo/db/demo/001_init.sql`, every tile's `db/<tile_id>/NNN_*.sql` (today `hvac-notes`), then `seed-staging.sql`. `002` and `003` are skipped on a fresh project: `004` replaces the same trigger and nothing depends on them.
+
 ## Next
-0. Owner: apply `db/core/007_tile_accent.sql` (after 005 and 006), `select * from core.security_check();`, Security Advisor. Until it runs, the live admin tile form cannot save (it calls the 7-argument function) and the dashboard shows every tile in blue.
+0. **Staging values:** the URL and key sent on 2026-11-04 for `dame-staging` were the live project's (`cykpvtekrdfmqimtrcps`); waiting for the staging project's own Project URL + publishable key (Supabase > `dame-staging` > Project Settings > API Keys). On arrival: `config.js` `STAGING`, staging URL in `img-src` and `connect-src` of the CSP line in `core/v1/README.md` and every page (core, `demo/`, `tools/`), entry under "Changes tiles must know" so `hvac-notes` updates its CSP line.
+0a. Owner: apply `db/core/007_tile_accent.sql` (after 005 and 006), `select * from core.security_check();`, Security Advisor. Until it runs, the live admin tile form cannot save (it calls the 7-argument function) and the dashboard shows every tile in blue.
 1. Owner: apply `db/core/005_owner_users.sql`, security check, then Admin > Users > New user for the first colleague (sign-in by username only). Register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
 2. Done: Supabase refuses made-up email domains (`.local`, `example.com`, ...), so the username-only scheme (001-003) was dropped. Since 004 an account is the user's own email + password, with a chosen username as the visible handle. No account existed before 004, so nothing migrates.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 5. **Owner, now:** turn off GitHub Pages on `QuickTools` (it loads cdnjs and Google Fonts on the DAME address, `docs/SECURITY.md` section 5). Also turn it off on `RECKON`, `Thinkneering` and `dame-tools-hub` unless one is needed live; a live one must load no outside code.
 6. **Tools tile:** Claude project "DAME - Tools" (instructions in `docs/tiles/tools-project-instructions.md`, delivered 2026-11-04) takes over the tile's features from here; this project keeps the core and the e2e step. Admin > Tiles: make sure a tile with id **`tools`** exists (name Tools, icon `tools`, no rights), pick its colour, switch it on, give access. Open `/dame-hub/tools/` on a laptop and a phone and try each tool with a real file. If the registered tile has another id, say so: `INSIDE_CORE` and the folder name must match it.
-7. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
+7. **Tile `projects`:** registered 2026-11-04 (see "Projects tile"). Owner creates the Claude project "DAME - Projects" from `docs/tiles/projects-project-instructions.md`, enters the tile in Admin > Tiles (off), then starts `DAME-PROJECTS: step 1 - project register`.
+8. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
 - 2026-11-04 - **Tiles inside the admin repo** (`core/v1/config.js` `INSIDE_CORE`, `Core.tilePath`; no breaking change). A tile the owner keeps in `dame-hub/<id>/` is served at `/dame-hub/<id>/` and the dashboard links it there. Sibling-repo tiles change nothing. The dev tooling is now `dev/serve.mjs` and `dev/test/` (was `tools/`).
