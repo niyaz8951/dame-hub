@@ -84,7 +84,7 @@ A tile declares its rights in `docs/TILE.md` (e.g. `edit`, `reply`, `export`) wi
 - Edit the admin repo, `core/v1`, the `core` schema, or another tile's schema, functions, bucket or repo; read another tile's tables.
 - Keep its own users, passwords or sessions.
 - Write the GitHub account name or a full site URL in code or data.
-- Use a CDN, external font, framework, tracker or iframe; use `innerHTML` with data; inline scripts; hard-coded colours.
+- Use a CDN, external font, framework, tracker or iframe (only exception: the YouTube player for tiles the owner allowed, on the conditions in `docs/SECURITY.md` section 4); use `innerHTML` with data; inline scripts; hard-coded colours.
 - Trust the page for any permission.
 
 ## 7. Asking the core for something

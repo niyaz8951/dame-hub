@@ -15,6 +15,12 @@ Load order in `<head>`, after the two meta lines:
 <script src="/<tile-id>/assets/<prefix>-page.js" defer></script>
 ```
 
+Tiles allowed the YouTube player (`docs/SECURITY.md` section 4; today `hvac-notes`) use this line on pages that show videos, and the line above on every other page:
+
+```html
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://www.youtube-nocookie.com">
+```
+
 The CSP line above is the published one. When a staging Supabase project is added, its URL is appended to `img-src` and `connect-src` here and in every page (core and tiles); `docs/STATUS.md` announces it under "Changes tiles must know".
 
 Page skeleton:

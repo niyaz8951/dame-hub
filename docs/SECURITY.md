@@ -40,6 +40,12 @@ GitHub Pages and the Supabase API are reachable from the internet; that is how t
   (the exact line is published in `core/v1/README.md`; tiles copy it). No inline scripts, no inline event handlers, no `eval`.
 - `textContent` / `Core.el()` only; never `innerHTML`, `insertAdjacentHTML` or `document.write` with any data.
 - No CDN, external font, analytics, tracker, iframe or third-party script. Libraries are copied into the repo after review.
+- **One exception, embedded YouTube player**, only for tiles the owner allowed (today: `hvac-notes`, 2026-11-04; the list is kept in `docs/TILES.md`, column Exceptions). The player runs on YouTube's own address, so it cannot read the DAME session, the page or any data; the conditions keep it that way:
+  - CSP: the published line plus `; frame-src https://www.youtube-nocookie.com` and nothing else. Other directives are unchanged (no YouTube thumbnails from `i.ytimg.com`, no YouTube scripts on the page).
+  - Only on pages that show videos. Nothing loads from YouTube until the reader taps play (a local placeholder until then).
+  - The `src` is built in code from a video id that matches `^[A-Za-z0-9_-]{11}$` and a whole-number start time. A URL taken from the content is never used directly: `https://www.youtube-nocookie.com/embed/<id>?rel=0&playsinline=1&autoplay=1[&start=<n>]`.
+  - The iframe carries `sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"`, `allow="autoplay; encrypted-media; picture-in-picture; fullscreen"`, `referrerpolicy="strict-origin-when-cross-origin"` (the player needs the referrer, which then shows only the site's address and no path), `loading="lazy"` and a `title`.
+  - A link "Watch on YouTube" is always shown next to it.
 - Every page: `<meta name="robots" content="noindex, nofollow">`; the admin repo has a `robots.txt` that disallows everything.
 - Nothing internal in `localStorage` except the session (kept by `core.js`) and harmless view settings. On sign-out, `core.js` clears the session and every key that starts with `dame.`. Tiles store per-user data in Supabase, not in the browser.
 - Downloads (xlsx, docx, pdf, csv) are built in the browser from data the user was allowed to read; never uploaded anywhere.
