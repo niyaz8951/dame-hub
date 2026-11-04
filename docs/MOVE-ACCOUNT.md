@@ -12,7 +12,7 @@ What changes: the address (`https://niyaz8951.github.io/...` becomes `https://<n
 ## The only places the account name appears
 Keep this list complete; the admin project adds to it if anything new ever needs the name.
 1. Supabase, every project: **Authentication > URL Configuration** (Site URL, redirect URLs).
-2. Docs in `dame-hub/docs/*.md`, `dame-hub/README.md`, `dame-hub/demo/docs/*.md` and every tile's `docs/*.md` and README (text only).
+2. Docs in `dame-hub/docs/**/*.md` (including the tile project instructions in `docs/tiles/`), `dame-hub/README.md`, `dame-hub/demo/docs/*.md` and every tile's `docs/*.md` and README (text only).
 3. Each Claude project's instructions and its GitHub connection.
 4. Collaborators on each tile repo (people, not text).
 
@@ -21,7 +21,7 @@ Keep this list complete; the admin project adds to it if anything new ever needs
 ### A. Moving to a new account or organization
 1. Create the new account or organization. Turn on 2FA (an organization: require it for everyone; members cannot create repos; base permission Read; secret scanning and push protection on for all repos).
 2. **Transfer `dame-hub` first**: repo **Settings > General > Danger zone > Transfer ownership** > new owner. Keep the name `dame-hub`.
-3. Transfer every tile repo the same way (list in `docs/TILES.md`). Keep their names.
+3. Transfer every tile repo and every source repo the same way (both lists in `docs/TILES.md`). Keep their names. Source repos stay private with Pages off.
 4. In each transferred repo, check: **Pages** on (`main`, root), rulesets on `main`, secret scanning and push protection on. Re-add collaborators if any are missing (in an organization, use one team per tile with Write on its repo).
 5. Supabase, every project: Site URL `https://<new>.github.io/dame-hub/`; redirect URLs `https://<new>.github.io/**` and `http://localhost:8080/**`.
 6. Open `https://<new>.github.io/dame-hub/`, sign in, open every tile, run `select * from core.security_check();` (no rows) and the Security Advisor (no errors).

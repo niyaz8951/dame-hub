@@ -3,7 +3,7 @@
 Kept in the admin repo as `docs/STANDARDS.md`. Every DAME Claude project reads it, together with `docs/SECURITY.md`, before work. Security wins over everything. If a tile's own instructions disagree with this file, this file wins unless the owner decided otherwise for that tile.
 
 ## 1. What DAME is
-An internal team site. Users sign in with their email address and password, wait for approval, and see only the tiles they were given. Each tile is a separate repo, run by its own team and Claude project; the admin repo provides login, theme and permissions to all of them. Everything starts fresh; no AI for now.
+An internal team site. Users sign in with their email address and password, wait for approval, and see only the tiles they were given. Each tile is a separate repo, run by its own team and Claude project; the admin repo provides login, theme and permissions to all of them. No AI for now. Users and accounts start fresh; an existing site of the owner may join as a tile when he decides it (`docs/NEW-TILE.md`, "Bringing an existing site in").
 
 ## 2. Architecture
 

@@ -26,6 +26,15 @@ Chats that start with **DAME-ADMIN** continue from here.
 - `access.html` added (not in the original page list): tile admins manage their users there, reached from the account menu on the tile.
 - `core.username_of(uuid)` added to the contract for Storage paths `<username>/...`.
 
+## Decisions 2026-11-04 (tile `hvac-notes`)
+- The owner's existing repos may join as tiles when he decides (the original idea: several repos, linked as tiles on the main site). The "nothing is imported" rule now applies to users and accounts only. Pattern in `docs/NEW-TILE.md`, "Bringing an existing site in".
+- First case: `HVAC` (HVAC Notes reader) -> tile **`hvac-notes`**, a new clean public repo. Its content (pages, images, index) moves to schema `hvac_notes` and private bucket `hvac-notes`. Per-user highlights, notes and reading positions move to the database. The shared-password encryption goes.
+- `HVAC` becomes the tile's **source repo** once the tile is live: private, Pages off, owner only, plain authoring copy. The tile's Publish page (right `edit`) uploads it to Supabase through the owner's session.
+- **Online only**: no offline copy of the content on devices (no service worker cache of tile data).
+- Videos open on YouTube (no iframe); content widgets become tile code.
+- The Claude project "HVAC Engineering" becomes "DAME - HVAC Notes" (instructions from the `docs/NEW-TILE.md` template, filled by the admin project).
+- History of `HVAC` checked (95 commits): no plain content, key or password was ever committed; only ciphertext, a wrapped key and empty `nav.json` files.
+
 ## SQL applied
 | File | `dame-hub` project |
 |---|---|
@@ -42,11 +51,15 @@ Chats that start with **DAME-ADMIN** continue from here.
 2. Done: Supabase refuses made-up email domains (`.local`, `example.com`, ...), so the username-only scheme (001-003) was dropped. Since 004 an account is the user's own email + password, with a chosen username as the visible handle. No account existed before 004, so nothing migrates.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
+5. **Owner, now:** turn off GitHub Pages on `QuickTools` (it loads cdnjs and Google Fonts on the DAME address, `docs/SECURITY.md` section 5). Also turn it off on `RECKON`, `Thinkneering` and `dame-tools-hub` unless one is needed live; a live one must load no outside code.
+6. **Tile `hvac-notes`:** owner creates repo `hvac-notes` (`docs/NEW-TILE.md` steps 2-5, right `edit`, tile off), converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
+- 2026-11-04 - Rule book: an existing site may join as a tile (`docs/NEW-TILE.md`, "Bringing an existing site in"); `docs/SECURITY.md` section 1 allows a private **source repo** for a tile's authoring copy and says shared-password encryption in a public repo is not allowed. `docs/STANDARDS.md` section 1 and the project template wording changed to match.
 - 2026-11-04 - `core_me()` also returns `email` (the caller's own address). Tiles keep showing `username`; never show or store the address in a tile.
 - 2026-11-04 - Site is named **DAME HUB**; theme now carries the Daikin Middle East palette (`--brand #0097E0`, night `#2FB0EC`), the layers-glyph mark and favicons in `core/v1/icons/`. Token names unchanged; `--link`, `--focus`, `--glass`, `--scrim`, `--ease`, `--brand-sky`, `--brand-navy` added. Pages add `<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg">` and the apple-touch-icon line (see `core/v1/README.md`).
 - 2026-11-04 - core/v1 first version. Icons are `.icon.i-<name>`; `Core.requireLogin` returns a promise of `me`; `core.username_of` available; CSP line in `core/v1/README.md`.
 
 ## Security notes
 - No key or password has ever been in this repo or in chat (the publishable key in `config.js` is public by design).
+- 2026-11-04 - Account scan: `QuickTools` pages load `cdnjs.cloudflare.com` scripts and Google Fonts. If its Pages is on, that code runs on the same address as DAME and could read the session. Open until the owner turns its Pages off. `RECKON`, `Thinkneering` and `dame-tools-hub` load no outside code in their pages (checked in their current files).
