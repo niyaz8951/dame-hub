@@ -16,6 +16,7 @@ window.DAME_CONFIG = (function () {
   return {
     SITE_NAME: 'DAME HUB',
     CORE: '/dame-hub',                    // the admin repo is always served here
+    INSIDE_CORE: ['tools', 'demo'],       // tiles kept inside the admin repo: served at /dame-hub/<id>/ instead of /<id>/
     ENV: isLocal ? 'staging' : 'live',
     SUPABASE: isLocal ? STAGING : LIVE,
     INTERNAL_DOMAIN: 'users.dame-hub.local', // accounts the owner creates: <username>@ this; never mailed, never shown

@@ -131,6 +131,8 @@ window.Core = (function () {
   Core.param = function (name) { return new URLSearchParams(window.location.search).get(name); };
   Core.go = function (path) { window.location.assign(path); };
   // Only paths on this site may be used as a "next" destination.
+  // Where a tile opens: /<id>/ for a sibling repo, /dame-hub/<id>/ for a tile kept inside the admin repo (config INSIDE_CORE).
+  Core.tilePath = function (id) { return ((cfg.INSIDE_CORE || []).indexOf(id) >= 0 ? CORE : '') + '/' + id + '/'; };
   Core.safeNext = function (p) { return p && /^\/[a-z0-9][a-z0-9-]*\/[^\s]*$/i.test(p) && p.indexOf('//') !== 0 ? p : CORE + '/dashboard.html'; };
 
   // ---------- toast ----------

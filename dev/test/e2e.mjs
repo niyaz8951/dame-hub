@@ -18,7 +18,7 @@ async function newPage(viewport) {
   page.on('response', (r) => { if (r.status() >= 500) errors.push(step + ': HTTP ' + r.status() + ' ' + r.url()); });
   return page;
 }
-async function shot(page, name) { await page.screenshot({ path: 'tools/test/out/' + name + '.png', fullPage: true }); }
+async function shot(page, name) { await page.screenshot({ path: 'dev/test/out/' + name + '.png', fullPage: true }); }
 async function expect(cond, msg) { if (!cond) { errors.push(step + ': FAILED ' + msg); console.log('  ✗ ' + msg); } else console.log('  ✓ ' + msg); }
 async function signIn(page, user, pass) {
   await page.goto(B + '/dame-hub/'); await page.fill('#si-email', user.includes('@') ? user : user + '@example.com'); await page.fill('#si-pass', pass); await page.click('#signin button[type=submit]');
@@ -50,8 +50,8 @@ try {
   await expect((await page.textContent('#si-error')).includes('Wrong username'), 'wrong password message');
   await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026');
   await page.waitForURL('**/dashboard.html');
-  await page.waitForSelector('.tile');
-  await expect((await page.$$('.tile')).length === 1, 'super sees the demo tile (' + (await page.$$('.tile')).length + ')');
+  await page.waitForSelector('a.tile');
+  await expect((await page.$$('a.tile')).length === 1, 'super sees the demo tile (' + (await page.$$('a.tile')).length + ')');
   await expect(await page.isVisible('a.btn[href$="admin.html"]'), 'admin button for super');
   await shot(page, 'dashboard');
 
@@ -133,7 +133,7 @@ try {
   await shot(page, 'admin');
 
   log('demo tile as super');
-  await page.goto(B + '/demo/');
+  await page.goto(B + '/dame-hub/demo/');
   await page.waitForSelector('#notes .state, #notes .demo-note');
   await page.fill('#title', 'Hello'); await page.fill('#body', 'first note'); await page.click('#add button');
   await page.waitForSelector('.demo-note');
@@ -154,8 +154,8 @@ try {
   log('demo_user phone');
   await signIn(page, 'demo_user', 'DemoPass2026');
   await page.waitForURL('**/dashboard.html');
-  await page.waitForSelector('.tile');
-  await expect((await page.$$('.tile')).length === 1, 'demo_user sees 1 tile');
+  await page.waitForSelector('a.tile');
+  await expect((await page.$$('a.tile')).length === 1, 'demo_user sees 1 tile');
   await expect(!(await page.isVisible('a.btn[href$="admin.html"]')), 'no admin button');
   const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
   await expect(scrollW <= 390, 'no sideways scroll on dashboard at 390px (' + scrollW + ')');
@@ -164,7 +164,7 @@ try {
   await expect((await page.textContent('main .state')).includes('Nothing here'), 'admin page refuses a user');
   await page.goto(B + '/hvac-notes/');
   await expect(true, 'missing tile folder -> 404 page (' + page.url() + ')');
-  await page.goto(B + '/demo/');
+  await page.goto(B + '/dame-hub/demo/');
   await page.waitForSelector('.demo-note');
   await expect(await page.isVisible('#add-card'), 'edit right shows the add form');
   await page.click('#try-manage');
@@ -190,16 +190,16 @@ try {
   await page.fill('#current', 'DemoPass2026'); await page.click('#pass-form button');
   await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('Password changed')));
   await expect(true, 'password changed');
-  await page.goto(B + '/dame-hub/dashboard.html'); await page.waitForSelector('.tile');
+  await page.goto(B + '/dame-hub/dashboard.html'); await page.waitForSelector('a.tile');
   await expect(true, 'still signed in after password change');
   await page.context().close();
 
   // 4. second sign-in elsewhere ends the first; owner reset forces a change
   page = await newPage();
   log('single session');
-  await signIn(page, 'demo_user', 'NewDemoPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('.tile');
+  await signIn(page, 'demo_user', 'NewDemoPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('a.tile');
   const page2 = await newPage();
-  await signIn(page2, 'demo_user', 'NewDemoPass2026'); await page2.waitForURL('**/dashboard.html'); await page2.waitForSelector('.tile');
+  await signIn(page2, 'demo_user', 'NewDemoPass2026'); await page2.waitForURL('**/dashboard.html'); await page2.waitForSelector('a.tile');
   await page.goto(B + '/dame-hub/dashboard.html');
   await page.waitForURL('**/dame-hub/?next=**');
   await expect(page.url().includes('next='), 'first session sent back to sign-in');
@@ -234,16 +234,49 @@ try {
   await expect((await page.textContent('#si-error')).includes('disabled'), 'disabled account message');
   await page.context().close();
 
+  // 5. Tools tile (kept inside dame-hub, served at /dame-hub/tools/): home + the four tool pages
+  log('tools tile');
+  psql("insert into core.tiles (id, name, tagline, icon, sort_order, enabled, rights, accent) values ('tools', 'Tools', 'Calculators', 'tools', 20, true, '{}', 'violet')");
+  psql("insert into core.tile_access (user_id, tile_id, is_admin, rights) select id, 'tools', false, '{}' from core.profiles where username = 'demo_user'");
+  const TOOL_PAGES = [['', 'Tools', '.tl-tools .tile', 4], ['parts-extractor/', 'Parts List Extractor', '#dropzone', 1], ['coil-data-extractor/', 'Coil Data Extractor', '#dropzone', 1],
+    ['container-calculator/', 'Container Calculator', '#results', 1], ['psychrometric-chart/', 'Psychrometric', 'svg', 1]];
+  for (const vp of [{ width: 1100, height: 800 }, { width: 390, height: 800 }]) {
+    page = await newPage(vp);
+    await signIn(page, vp.width > 390 ? 'niyaz@gmail.com' : 'demo_user', vp.width > 390 ? 'OwnerPass2026' : 'FinalPass2026');
+    await page.waitForURL('**/dashboard.html'); await page.waitForSelector('a.tile');
+    const href = await page.getAttribute('.tile[href*="tools"]', 'href');
+    await expect(href === '/dame-hub/tools/', 'dashboard links the tools tile inside dame-hub (' + href + ')');
+    for (const [path, name, sel, n] of TOOL_PAGES) {
+      await page.goto(B + '/dame-hub/tools/' + path);
+      await page.waitForSelector(sel);
+      await page.waitForFunction(() => !document.documentElement.hasAttribute('data-loading'));
+      await expect((await page.$$(sel)).length >= n, name + ': page built (' + path + ')');
+      await expect((await page.textContent('#topbar')).includes('Tools'), name + ': topbar shows the tile');
+      await expect((await page.getAttribute('html', 'data-accent')) === 'violet', name + ': tile accent on <html>');
+      const w = await page.evaluate(() => document.documentElement.scrollWidth);
+      await expect(w <= vp.width, name + ': no sideways scroll at ' + vp.width + 'px (' + w + ')');
+      await shot(page, 'tools-' + (path.replace('/', '') || 'home') + '-' + vp.width);
+    }
+    await page.context().close();
+  }
+  // a user without the tile is refused
+  page = await newPage();
+  await signIn(page, 'demo_pending', 'DemoPass2026');
+  await page.goto(B + '/dame-hub/tools/psychrometric-chart/');
+  await page.waitForSelector('main .state');
+  await expect(!(await page.isVisible('#states-body')), 'tools page refuses a user without the tile');
+  await page.context().close();
+
   // 6. night mode screenshot
   page = await newPage();
   log('night');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('.tile');
+  await signIn(page, 'niyaz@gmail.com', 'OwnerPass2026'); await page.waitForURL('**/dashboard.html'); await page.waitForSelector('a.tile');
   await shot(page, 'dashboard-night');
   await page.goto(B + '/dame-hub/admin.html#tiles'); await page.waitForSelector('#tiles table'); await shot(page, 'admin-night');
   await page.context().close();
 } catch (e) {
-  errors.push(step + ': EXCEPTION ' + e.message); try { const p = (await browser.contexts()).at(-1).pages().at(-1); await p.screenshot({ path: 'tools/test/out/fail.png', fullPage: true }); } catch {}
+  errors.push(step + ': EXCEPTION ' + e.message); try { const p = (await browser.contexts()).at(-1).pages().at(-1); await p.screenshot({ path: 'dev/test/out/fail.png', fullPage: true }); } catch {}
 }
 await browser.close();
 if (errors.length) { console.log('\nPROBLEMS:'); errors.forEach((e) => console.log(' - ' + e)); process.exit(1); }

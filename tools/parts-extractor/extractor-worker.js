@@ -1,0 +1,1140 @@
+/* Parts list extractor — worker.
+ *
+ * A direct port of extract_parts_lists.py. The Python tool is the reference
+ * implementation and the rules below are its rules, deliberately unchanged:
+ * the same header dictionary, the same header/title/section tests, the same
+ * fill-down set, the same model-code canonicalisation. Where this file departs
+ * from the Python it is noted inline.
+ *
+ * It runs in a worker because parsing ten workbooks and writing sixty-odd
+ * thousand rows is seconds of solid CPU. On the main thread that is a frozen
+ * tab with no progress and no way out.
+ *
+ * Classic worker, not a module: SheetJS is loaded with importScripts, which
+ * module workers do not have.
+ */
+/* global XLSX */
+importScripts('../vendor/xlsx/xlsx.full.min.js');
+/* SheetJS reads; xlsx-out writes. The community build discards cell fills on
+   write, and this tool needs to colour the rows it generates. */
+importScripts('xlsx-out.js');
+
+/* ------------------------------------------------------------------ *
+ * 1. Config — the header dictionary.
+ *
+ * Anything NOT listed here is treated as a model column, so new model
+ * codes need no change. To support a new spelling, add one alias.
+ * ------------------------------------------------------------------ */
+const HEADER_ALIASES = {
+  'Item': ['item', 'item no', 'item number'],
+  'Drawing': ['drawing', 'drawing no', 'drawing ref'],
+  'Description': ['description', 'part description'],
+  'Part Number DENV': ['denv part number', 'part number denv', 'denv p/no',
+    'denv part no', 'denv partnumber', 'denv partno'],
+  'Part Number DAE': ['part number', 'part number dae', 'dae part number',
+    'mcq part number', 'dae p/no', 'mcq p/no', 'part number mcq', 'supplier ref',
+    'part no', 'dae partno', 'mcq partno'],
+  'Details': ['details', 'detail', 'remarks'],
+  'Circuit': ['circuit', 'circuit no'],
+  'Wiring Diagram Reference': ['wiring diagram reference', 'wiring diagram',
+    'wiring diagram ref', 'wiring ref'],
+  'Stock Criticality': ['critical stock item?', 'critical stock item',
+    'stock criticality', 'criticality', 'critical stock', 'stock critical item?'],
+};
+
+const LOOKUP = {};
+for (const [canon, aliases] of Object.entries(HEADER_ALIASES)) {
+  for (const a of aliases) LOOKUP[a] = canon;
+}
+/* Second-pass lookup ignoring spaces, matching the Python fuzzy pass. */
+const LOOKUP_TIGHT = {};
+for (const [alias, canon] of Object.entries(LOOKUP)) {
+  LOOKUP_TIGHT[alias.replace(/ /g, '')] = canon;
+}
+
+const DESCRIPTOR_ORDER = ['Item', 'Drawing', 'Part Number DENV', 'Description',
+  'Part Number DAE', 'Details', 'Circuit', 'Wiring Diagram Reference',
+  'Stock Criticality'];
+
+const FILL_DOWN = ['Item', 'Drawing', 'Description', 'Circuit'];
+const MIN_MODEL_COLS = 1;
+const MAX_COLS = 256;
+
+const SHEET_BLACKLIST = ['front page', 'back page', 'index', 'drawings', 'revision',
+  'nomenclature', 'conversion table', 'options list', 'electrical legend'];
+
+const TITLE_PAT = /^(page\s*\d+|issue\s*\d+|.*\bissue\s*\d+)/i;
+const NOISE_PAT = /quantity for each/i;
+/* No trailing \b: "Denv Partn°" contains "part" followed by a word character,
+   so a closing boundary made the test miss precisely the case it exists to
+   catch. Over-flagging here is harmless — this sheet is meant to be read. */
+const SUSPECT_HEADER = /\b(part|number|stock|wiring|circuit|detail|item|drawing|description|critical|ref)/i;
+
+/* ------------------------------------------------------------------ *
+ * 2. Reading — one uniform grid of strings, merges expanded.
+ * ------------------------------------------------------------------ */
+function fmt(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(v);
+  if (v instanceof Date) {
+    // Match the Python isoformat() output for date cells.
+    const pad = (n) => String(n).padStart(2, '0');
+    const base = `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+    const t = `${pad(v.getHours())}:${pad(v.getMinutes())}:${pad(v.getSeconds())}`;
+    return t === '00:00:00' ? base : `${base}T${t}`;
+  }
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+  return String(v).replace(/\s+/g, ' ').trim();
+}
+
+/* Returns { grid, raw }.
+   `raw` has merged values only in the top-left cell, as the file stores them,
+   and is what the header / title / section tests read — exactly as in the
+   Python, where those tests run against the unexpanded row.
+   `grid` has every merged region filled across, and is what values are taken
+   from. Keeping both is what makes "1pc per compressor" spanning six model
+   columns land in all six without a heuristic. */
+function readGrid(ws) {
+  const rowsRaw = XLSX.utils.sheet_to_json(ws, {
+    header: 1, raw: true, defval: null, blankrows: true,
+  });
+
+  const grid = [];
+  for (const row of rowsRaw) {
+    const cells = (row || []).map(fmt);
+    while (cells.length && cells[cells.length - 1] === '') cells.pop();
+    grid.push(cells.slice(0, MAX_COLS));
+  }
+  let ncol = 0;
+  for (const r of grid) ncol = Math.max(ncol, r.length);
+  for (const r of grid) while (r.length < ncol) r.push('');
+
+  const raw = grid.map((r) => r.slice());
+
+  for (const m of (ws['!merges'] || [])) {
+    const r1 = m.s.r; const c1 = m.s.c; const r2 = m.e.r; const c2 = m.e.c;
+    if (r1 >= grid.length || c1 >= ncol) continue;
+    const val = grid[r1][c1];
+    if (val === '') continue;
+    for (let r = r1; r <= Math.min(r2, grid.length - 1); r++) {
+      for (let c = c1; c <= Math.min(c2, ncol - 1); c++) grid[r][c] = val;
+    }
+  }
+  return { grid, raw };
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Structure detection
+ * ------------------------------------------------------------------ */
+function norm(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    /* "n°" is the French abbreviation for "number" and turns up in headers
+       written by the Belgian/French sites: "Denv Partn°", "Part n°". Folding
+       it to "no" here lets the existing "denv part no" alias match, instead
+       of needing one alias per punctuation variant. Both the degree sign
+       (U+00B0) and the masculine ordinal (U+00BA) appear in the wild. */
+    .replace(/n\s*[\u00b0\u00ba]/g, 'no')
+    .replace(/[:.]+$/, '')
+    .trim();
+}
+
+/* Repeated page headers often omit labels the first header carried — the
+   printer only needed them at the top of the sheet. Replacing the mapping
+   wholesale on every repeat therefore DROPS those columns for the rest of the
+   sheet, silently: the column is in neither the descriptor mapping nor the
+   model list, so its values are never read. This merges a repeat into what is
+   already known, retaining a previous mapping only where the repeat leaves
+   that column genuinely blank. A repeat that renames a column still wins. */
+function mergeHeader(prev, next, rawRow) {
+  if (!prev) return next;
+  const taken = new Set(Object.values(next.mapping).concat(next.models.map((m) => m[0])));
+  for (const [canon, idx] of Object.entries(prev.mapping)) {
+    if (canon in next.mapping) continue;   // the repeat names it, possibly elsewhere
+    if (taken.has(idx)) continue;          // that column is something else now
+    const cell = rawRow[idx];
+    if (cell === undefined || cell === null || String(cell).trim() === '') {
+      next.mapping[canon] = idx;
+      taken.add(idx);
+    }
+  }
+  return next;
+}
+
+function classifyHeader(row) {
+  const mapping = {};
+  const models = [];
+  for (let idx = 0; idx < row.length; idx++) {
+    const n = norm(row[idx]);
+    if (!n) continue;
+    let canon = LOOKUP[n];
+    if (canon === undefined) canon = LOOKUP_TIGHT[n.replace(/ /g, '')];
+    if (canon !== undefined) {
+      if (!(canon in mapping)) mapping[canon] = idx;
+    } else {
+      models.push([idx, String(row[idx]).replace(/\s+/g, ' ').trim()]);
+    }
+  }
+  const ok = ('Description' in mapping)
+    && (('Part Number DENV' in mapping) || ('Part Number DAE' in mapping))
+    && models.length >= MIN_MODEL_COLS;
+  return ok ? { mapping, models } : null;
+}
+
+function isTitleRow(rawRow) {
+  const vals = rawRow.filter((v) => v);
+  if (!vals.length) return true;
+  if (NOISE_PAT.test(vals.join(' '))) return true;
+  if (TITLE_PAT.test(norm(vals[0])) && new Set(vals).size <= 4) return true;
+  return false;
+}
+
+function isSectionRow(rawRow, mapping, models) {
+  const filled = [];
+  for (let i = 0; i < rawRow.length; i++) if (rawRow[i]) filled.push(i);
+  if (!filled.length) return false;
+
+  for (const k of ['Description', 'Part Number DENV', 'Part Number DAE']) {
+    const i = mapping[k];
+    if (i !== undefined && i < rawRow.length && rawRow[i]) return false;
+  }
+  for (const [i] of models) if (i < rawRow.length && rawRow[i]) return false;
+  return Boolean(rawRow[filled[0]]) && filled[0] <= 2;
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. Sheet -> long rows
+ * ------------------------------------------------------------------ */
+function extractSheet(ws, fileName, sheetName, keepDash) {
+  const { grid, raw } = readGrid(ws);
+  if (!grid.length) return { rows: [], headerVariants: 0 };
+
+  let mapping = null;
+  let models = null;
+  let section = '';
+  let last = {};
+  for (const k of FILL_DOWN) last[k] = '';
+  const out = [];
+  let headerVariants = 0;
+
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r];
+    const rawRow = raw[r];
+
+    const hit = classifyHeader(rawRow);
+    if (hit) {
+      // First header, or a repeated page header. A repeat with a different
+      // model list means the sheet changes layout partway down.
+      const before = models ? models.map((x) => x[1]).join('\u0001') : null;
+      const after = hit.models.map((x) => x[1]).join('\u0001');
+      if (mapping === null || before !== after) headerVariants++;
+      const merged = mergeHeader(mapping !== null ? { mapping, models } : null, hit, rawRow);
+      mapping = merged.mapping;
+      models = merged.models;
+      last = {};
+      for (const k of FILL_DOWN) last[k] = '';
+      continue;
+    }
+    if (mapping === null) continue;
+    if (isTitleRow(rawRow)) continue;
+    if (isSectionRow(rawRow, mapping, models)) {
+      const first = rawRow.findIndex((v) => v);
+      section = rawRow[first];
+      continue;
+    }
+
+    const rec = {};
+    for (const canon of DESCRIPTOR_ORDER) {
+      const i = mapping[canon];
+      rec[canon] = (i !== undefined && i < row.length) ? row[i] : '';
+    }
+    for (const k of FILL_DOWN) {
+      if (rec[k]) last[k] = rec[k];
+      else rec[k] = last[k] || '';
+    }
+
+    if (!(rec['Description'] || rec['Part Number DENV'] || rec['Part Number DAE'])) continue;
+
+    const qty = models.map(([i, name]) => [name, i < row.length ? row[i] : '']);
+    if (!qty.some(([, v]) => v)) continue;   // no quantities at all -> noise
+
+    for (const [name, val] of qty) {
+      if (val === '') continue;
+      if (!keepDash && (val.trim() === '-' || val.trim() === '0')) continue;
+      out.push({
+        'Source File': fileName,
+        'Sheet': sheetName,
+        'Section': section,
+        ...rec,
+        'Attribute': name,
+        'Value': val,
+      });
+    }
+  }
+  return { rows: out, headerVariants };
+}
+
+/* ------------------------------------------------------------------ *
+ * 4a. NEW format — EWAD parts lists that carry their own model names
+ *
+ * The newer EWAD workbooks put the full DENV model name in the row directly
+ * ABOVE the header, one per model column:
+ *
+ *   row 0   |            | EWAD-M-C    |      |         | EWAD300M-SSC | EWAD400M-SSC2 |
+ *   row 1   |            |             | Part Number | Details | 300    | 400           |
+ *   row 2   | Compressor | HS-3118 ... | P3313...    | HSS3118 | 1      | -             |
+ *
+ * So there is nothing to reconstruct and no overview to consult: the name is
+ * read straight off the sheet. Three things differ from the old format and
+ * each needs its own handling:
+ *
+ *   - The header need not say "Description". EWAD-M-C leaves that column
+ *     unlabelled, which is why the old-format rules dropped the file entirely.
+ *     A header here needs a part-number column and at least one model column;
+ *     the description column is inferred when it is not named.
+ *   - The section lives in column A beside the parts ("Compressor", "Liquid
+ *     Line"), not in a banner row above them. Unlabelled columns to the left
+ *     of the first labelled descriptor are therefore read as: first one
+ *     Section, second one (if Description is not named) Description.
+ *   - Model names can be missing or wrong in the source. Neither is repaired
+ *     — a model name this tool made up would be worse than a blank. Missing
+ *     names are left blank and wrong-looking ones are flagged, both in
+ *     QA_Model_Map.
+ * ------------------------------------------------------------------ */
+
+function classifyHeaderNew(row) {
+  const mapping = {};
+  const models = [];
+  for (let idx = 0; idx < row.length; idx++) {
+    const n = norm(row[idx]);
+    if (!n) continue;
+    let canon = LOOKUP[n];
+    if (canon === undefined) canon = LOOKUP_TIGHT[n.replace(/ /g, '')];
+    if (canon !== undefined) {
+      if (!(canon in mapping)) mapping[canon] = idx;
+    } else {
+      models.push([idx, String(row[idx]).replace(/\s+/g, ' ').trim()]);
+    }
+  }
+  const ok = (('Part Number DENV' in mapping) || ('Part Number DAE' in mapping))
+    && models.length >= MIN_MODEL_COLS;
+  return ok ? { mapping, models } : null;
+}
+
+/* The efficiency letter of an EWAD model name — the S or X of its "SS"/"XS"
+   style marker after the capacity: EWAD350M-XSB7 -> X, EWADC19M6SSC3 -> S. */
+function modelEfficiencyLetter(name, core) {
+  const upper = String(name).toUpperCase();
+  const at = core ? upper.indexOf(core) : -1;
+  const tail = at >= 0 ? upper.slice(at + core.length) : upper;
+  const m = tail.match(/([SX])[SLR]/);
+  return m ? m[1] : '';
+}
+
+/* Does a model name agree with the short code printed under it? Two checks,
+   both warnings only — the source value is always kept as it is:
+     - the code's capacity ("H15" of "H15S") appears in the model name;
+     - where the code ends in S or X, the model name's efficiency marker is
+       the same letter. This is what catches a sheet of "S" codes sitting
+       under a row of XS model names. */
+function checkModelName(code, name) {
+  if (!name) return 'no model name in sheet';
+  const c = String(code).toUpperCase().replace(/[^A-Z0-9.]/g, '');
+  const m = c.match(/^(.*?\d)([SX])$/);
+  const core = m ? m[1] : c;
+  const letter = m ? m[2] : '';
+  const upper = String(name).toUpperCase();
+  if (core && !upper.includes(core)) return `check: code ${code} not found in model name`;
+  if (letter) {
+    const eff = modelEfficiencyLetter(upper, core);
+    if (eff && eff !== letter) return `check: code says ${letter}, model name says ${eff}`;
+  }
+  return 'from sheet';
+}
+
+function extractSheetNew(ws, fileName, sheetName, keepDash) {
+  const { grid, raw } = readGrid(ws);
+  if (!grid.length) return { rows: [], headerVariants: 0, names: [] };
+
+  // Header: first row that names a part-number column and has model columns.
+  let h = -1; let hit = null;
+  for (let r = 0; r < raw.length; r++) {
+    const got = classifyHeaderNew(raw[r]);
+    if (got) { h = r; hit = got; break; }
+  }
+  if (h < 0) return { rows: [], headerVariants: 0, names: [] };
+
+  const { mapping, models } = hit;
+
+  /* Model names: the nearest non-empty row above the header. Read from the
+     UNEXPANDED grid, so a label merged across several columns lands only in
+     its own column rather than being copied onto its neighbours. */
+  let above = null;
+  for (let r = h - 1; r >= 0; r--) {
+    if (raw[r].some((v) => v)) { above = raw[r]; break; }
+  }
+  const nameFor = new Map();
+  for (const [idx] of models) {
+    const v = above && idx < above.length ? above[idx] : '';
+    // A model name has letters and digits; anything else is a stray label.
+    nameFor.set(idx, /[A-Z]/i.test(v) && /\d/.test(v) ? v : '');
+  }
+
+  // Unlabelled columns left of the first labelled descriptor.
+  const firstLabelled = Math.min(...Object.values(mapping));
+  const modelIdx = new Set(models.map((m) => m[0]));
+  const unlabelled = [];
+  for (let c = 0; c < firstLabelled; c++) if (!modelIdx.has(c)) unlabelled.push(c);
+  const sectionCol = unlabelled.length ? unlabelled[0] : -1;
+  const descCol = ('Description' in mapping)
+    ? mapping['Description']
+    : (unlabelled.length > 1 ? unlabelled[1] : -1);
+
+  const out = [];
+  let section = '';
+  let lastDesc = '';
+
+  for (let r = h + 1; r < grid.length; r++) {
+    const row = grid[r];
+    const rawRow = raw[r];
+    if (!rawRow.some((v) => v)) continue;
+    if (isTitleRow(rawRow)) continue;
+
+    /* Section from column A. A new section resets the carried description, so
+       a part left undescribed at the top of "Liquid Line" does not inherit
+       the last compressor's description. */
+    const sec = sectionCol >= 0 && sectionCol < row.length ? row[sectionCol] : '';
+    if (sec && sec !== section) { section = sec; lastDesc = ''; }
+
+    const rec = {};
+    for (const canon of DESCRIPTOR_ORDER) {
+      const i = canon === 'Description' ? descCol : mapping[canon];
+      rec[canon] = (i !== undefined && i >= 0 && i < row.length) ? row[i] : '';
+    }
+    if (rec['Description']) lastDesc = rec['Description'];
+    else rec['Description'] = lastDesc;
+
+    /* Description OR a part number — the same test as the old format. Lines
+       like "Economiser Expansion Valve" are real parts whose number has not
+       been issued yet; requiring a part number silently dropped them. */
+    if (!(rec['Description'] || rec['Part Number DENV'] || rec['Part Number DAE'])) continue;
+
+    const qty = models.map(([i, code]) => [i, code, i < row.length ? row[i] : '']);
+    if (!qty.some(([, , v]) => v)) continue;
+
+    for (const [i, code, val] of qty) {
+      if (val === '') continue;
+      if (!keepDash && (val.trim() === '-' || val.trim() === '0')) continue;
+      out.push({
+        'Source File': fileName,
+        'Sheet': sheetName,
+        'Section': section,
+        ...rec,
+        'Attribute': code,
+        'Value': val,
+        'MCQ-Modelname': '',
+        'DENV-Modelname': nameFor.get(i) || '',
+        'Model #': nameFor.get(i) ? '1' : '',
+        'Model Match': checkModelName(code, nameFor.get(i)),
+      });
+    }
+  }
+
+  const blankSection = out.filter((r) => !r['Section']).length;
+
+  /* One audit row per model COLUMN, carrying that column's letter.
+     A sheet can hold several model blocks side by side and reuse a code
+     between them — EWAH-MZD's Foglio1 has 96 model columns whose codes reduce
+     to 66 distinct values, so "400" is EWAH400MZSSD1 in one block,
+     EWAH400MZSSD2 in another and EWAH400MZPSD1 in a third. Keyed on the code
+     alone those columns collapse and the audit reports one arbitrary name for
+     all three. Parts_Long was always right, because it reads the name at the
+     column the quantity came from; only this sheet was lying. */
+  const names = models.map(([i, code]) => ({
+    'Source File': fileName, 'Sheet': sheetName,
+    'Column': XLSX.utils.encode_col(i),
+    'Attribute': code,
+    'Matches': nameFor.get(i) ? 1 : 0,
+    'MCQ-Modelname': '',
+    'DENV-Modelname': nameFor.get(i) || '',
+    'Model Match': checkModelName(code, nameFor.get(i)),
+  }));
+  return { rows: out, headerVariants: 1, names, blankSection };
+}
+
+/* ------------------------------------------------------------------ *
+ * 4b. Model name mapping  (MCQ -> DENV)
+ *
+ * The parts lists identify a unit by a column header like "MNG Mono 029.1".
+ * The overview workbook maps a full MCQ model name to its DENV equivalent,
+ * e.g. McEnergyMonoSE029.1ST134 -> EWAD100E-SS. The MCQ names themselves never
+ * appear in the parts lists, so they have to be reconstructed from what is
+ * there: the file name, the sheet name, and the column header.
+ *
+ * Three keys, narrowest first:
+ *
+ *   1. PARTS LIST NUMBER, from the file name. "n_19-McEnergy_Mono..." and
+ *      "n°19-..." both give 19, which is the "Parts list n°" column in the
+ *      overview. This alone cuts 2,970 rows to a few dozen and is the reason
+ *      the rest can be loose without going wrong.
+ *   2. CAPACITY, from the column header. "MNG Mono 029.1" -> "029.1", which
+ *      must appear in the MCQ name. This is the real discriminator: it is what
+ *      separates one unit from its siblings in the same family.
+ *   3. EVERYTHING ELSE, scored not filtered. Alphabetic tokens from the sheet
+ *      name and the header ("MONO", "SE", "ST", "LN", "MNG") are counted as
+ *      substrings of the MCQ name, and the highest-scoring candidates win.
+ *
+ * ONE HEADER OFTEN MATCHES SEVERAL UNITS, AND THAT IS THE CORRECT ANSWER.
+ * Sheet "Mono SE ST_LN" covers both the standard and low-noise variants, and
+ * parts list 19 covers the condenserless (CU) units too, so "MNG Mono 029.1"
+ * legitimately maps to four DENV names. The quantity in that column applies to
+ * all four. Collapsing them to one would be inventing an answer, so every
+ * match is listed and the count is reported alongside.
+ */
+
+function partsListNumber(fileName) {
+  // "n_19-...", "n°19-...", "n 19 - ...", "19-McEnergy..." all give "19".
+  const m = String(fileName).match(/^\s*(?:n\s*[_\u00b0\u00ba.\-]?\s*)?(\d{1,3})\b/i);
+  return m ? String(parseInt(m[1], 10)) : null;
+}
+
+/* Split a model name into the three parts that actually carry meaning:
+     ALSFSE178.2ST134  ->  prefix "ALSFSE", cap "178.2", suffix variant "ST"
+     ALSFSE178.2XXN134 ->  prefix "ALSFSE", cap "178.2", suffix variant "XXN"
+   The trailing digits are the refrigerant (134) and are ignored. Names with no
+   decimal capacity keep the whole string as the prefix and match as before. */
+function splitModelName(name) {
+  const norm = String(name).toUpperCase().replace(/[^A-Z0-9.]/g, '');
+  const m = norm.match(/^(.*?)(\d+\.\d+)(.*)$/);
+  if (!m) return { norm, prefix: norm, cap: null, suffixVar: '' };
+  return { norm, prefix: m[1], cap: m[2], suffixVar: (m[3].match(/^[A-Z]+/) || [''])[0] };
+}
+
+/* Words in a column header that name a unit variant rather than a capacity.
+   "Econ" (economiser) marks the high-efficiency build, which is XE in the MCQ
+   naming. This is a DOMAIN mapping, not something derivable from the files —
+   add to it when a parts list uses a qualifier the matcher does not know. */
+/* A column header naming more units than this has not been identified, it has
+   been guessed at. See the guard in matchModels. */
+const MAX_MODEL_MATCHES = 12;
+
+/* Excel's worksheet limit is 1,048,576 rows including the header. It is not
+   the binding constraint here — see XLSX_CELL_BUDGET. */
+const MAX_OUTPUT_ROWS = 1048575;
+
+/* The real ceiling is the writer, not Excel. XLSX.write builds the entire
+   worksheet as one object with a property per cell and then serialises it to
+   one XML string, so memory grows several hundred bytes per cell and the tab
+   dies somewhere past two or three million cells — "Invalid array length" or
+   "Too many properties to enumerate" depending on which allocation gives out
+   first. Neither message says what went wrong, and no guard makes a workbook
+   that large writable.
+   Past this budget the parts table is written as CSV instead: a CSV is built
+   from string chunks with no per-cell objects, so 400,000 rows costs about
+   0.6 seconds and 100 MB rather than failing outright. The log and QA sheets
+   are small and stay in a companion workbook. */
+const XLSX_CELL_BUDGET = 1200000;
+
+const VARIANT_SYNONYMS = {
+  ECON: ['XE'],
+  ECONOMISER: ['XE'],
+  ECONOMIZER: ['XE'],
+};
+
+function tokens(text) {
+  return (String(text).toUpperCase().match(/[A-Z]+|[0-9]+(?:\.[0-9]+)?/g) || []);
+}
+
+function isNumericToken(t) { return /^[0-9]/.test(t); }
+
+/* The letters that follow a capacity inside a normalised name.
+   "EWAD190TZSSB1" after "190" -> "TZSSB";  "190S" after "190" -> "S". */
+function tailAfter(norm, cap) {
+  const i = norm.indexOf(cap);
+  if (i < 0) return '';
+  const m = norm.slice(i + cap.length).match(/^[A-Z]+/);
+  return m ? m[0] : '';
+}
+
+/* A model's own tail, found from the first run of two or more digits in it.
+   A decimal capacity ("178.2") is followed by "." rather than a letter, so
+   those families return "" and are left to the existing rules untouched. */
+function modelTail(norm) {
+  const m = norm.match(/\d{2,}/);
+  return m ? tailAfter(norm, m[0]) : '';
+}
+
+function commonPrefix(list) {
+  if (!list.length) return '';
+  let p = list[0];
+  for (const s of list) {
+    let k = 0;
+    while (k < p.length && k < s.length && p.charAt(k) === s.charAt(k)) k++;
+    p = p.slice(0, k);
+    if (!p) break;
+  }
+  return p;
+}
+
+/* Where does `cap` sit inside `hay`, and how cleanly?
+     'exact' - it is the whole digit run:      "160" in "EWAD160TZSSB1"
+     'loose' - it starts the run but more
+               digits follow:                  "400" in "EWYS4004ZXSB2"
+                                               (the 4 belongs to the "4Z" family code)
+     null    - it does not start a run at all: "65.2" inside "165.2"
+
+   The LEFT edge is the one that matters and is strict: a digit or a "." before
+   the match means we have landed inside a longer number, which is how a header
+   for 065.2 used to claim the 165.2 unit. The right edge is reported rather
+   than enforced, because a family code can begin with a digit — "EWYS4004Z" is
+   capacity 400 followed by "4Z" — and rejecting those lost every 4Z family.
+   The caller prefers exact matches and falls back to loose ones only when no
+   exact match exists, so a hypothetical "1600" cannot steal a header for 160
+   while a real "4004Z" still resolves. */
+function capacityMatch(hay, cap) {
+  let i = hay.indexOf(cap);
+  let loose = false;
+  while (i !== -1) {
+    const before = i === 0 ? '' : hay.charAt(i - 1);
+    if (!/[0-9.]/.test(before)) {
+      if (!/[0-9]/.test(hay.charAt(i + cap.length))) return 'exact';
+      loose = true;
+    }
+    i = hay.indexOf(cap, i + 1);
+  }
+  return loose ? 'loose' : null;
+}
+
+/* Joining names for display. A parts list whose DENV names are all blank would
+   otherwise render as " / ", which reads like a value rather than a gap. Only
+   the all-blank case collapses, so index alignment with the MCQ list — which
+   the one-row-per-model split depends on — is preserved wherever any real name
+   exists. */
+function joinNames(a) { return a.some(Boolean) ? a.join(' / ') : ''; }
+
+/* Build the lookup once per run: { partsListNo: [{ mcq, mcqNorm, denv }] }. */
+function buildModelMap(sheet) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  const byList = new Map();
+  let pairs = 0;
+  for (const r of rows) {
+    // Header spellings differ between revisions of the overview file.
+    const no = String(r['Parts list n°'] ?? r['Parts list no'] ?? r['Parts List'] ?? '').trim();
+    const mcq = String(r['MCQ-Modelname'] ?? r['MCQ Modelname'] ?? '').trim();
+    let denv = String(r['DENV-Modelname'] ?? r['DENV Modelname'] ?? '').trim();
+
+    /* "--" is not a model name, it is an empty cell someone typed a dash into.
+       Parts list 20 carries it on all 77 of its rows, so every header in that
+       workbook came back with the same "--" and looked like a matching fault
+       rather than the gap in the overview that it is. The MCQ name on those
+       rows is real, so the entry is kept and matched on; only the DENV name is
+       blanked. */
+    if (/^[-\u2013\u2014\s]+$/.test(denv) || /^(n\/?a|tbd|none)$/i.test(denv)) denv = '';
+
+    /* Over half the overview has a DENV name and NO MCQ name — newer units
+       with no McQuay equivalent. Requiring both would discard them and leave
+       every parts list built on those models unmatched, so one or the other is
+       required and matching runs against whichever exists: for a DENV-only
+       family the parts list headers describe DENV units in the first place. */
+    if (!mcq && !denv) continue;
+    if (/^no parts list/i.test(mcq)) continue;   // placeholder text, not a model
+    const key = no ? String(parseInt(no, 10)) : '';
+    if (!byList.has(key)) byList.set(key, []);
+    /* The MCQ column carries the FAMILY LABEL on the first row of many lists —
+       "EWWD-VZ", "EWAD-TZ-B", "EWYD~4Z" — rather than a model name. Matching
+       on it made that row unreachable, and since it is always the first row,
+       the model it hides is the first of its family: EWWD600VZ-SSA1 and
+       EWAD160TZSSB1 were both missing from their own results. A label carries
+       no capacity, so a name without one falls through to the DENV side.
+       43 rows in the current overview are affected. */
+    const target = /\d{2,}|\d+\.\d+/.test(mcq) ? mcq : (denv || mcq);
+    const parts = splitModelName(target);
+    byList.get(key).push({
+      mcq, denv,
+      mcqNorm: parts.norm,
+      prefix: parts.prefix,
+      suffixVar: parts.suffixVar,
+    });
+    pairs++;
+  }
+  return { byList, pairs };
+}
+
+/* Returns { mcq: [...], denv: [...], how: 'list+capacity' | ... }. */
+function matchModels(map, fileName, sheetName, attribute) {
+  if (!map) return null;
+
+  const listNo = partsListNumber(fileName);
+  let pool = listNo !== null ? (map.byList.get(listNo) || []) : [];
+  let scope = 'list';
+  if (!pool.length) {
+    // No usable parts list number, or none of its rows survived. Searching the
+    // whole table is far weaker, so it is done but labelled as such.
+    pool = [].concat(...map.byList.values());
+    scope = 'all lists';
+  }
+  if (!pool.length) return null;
+
+  const attrTokens = tokens(attribute);
+  const sheetTokens = tokens(sheetName);
+  /* A CAPACITY IS A NUMBER OF TWO OR MORE DIGITS, or a decimal.
+     A lone digit is a series or revision marker, never a capacity — and it is
+     ruinous as one: the header "600VZ SSA1" tokenises to 600, VZ, SSA, 1, and
+     that trailing "1" (from SSA1) matches EVERY model whose name ends in A1.
+     Every EWWD-VZ header then claimed the same set of models, which is exactly
+     the "same model names on many different rows" complaint. */
+  const caps = attrTokens.filter((t) => isNumericToken(t) && (t.indexOf('.') >= 0 || t.length >= 2));
+  const words = [...attrTokens, ...sheetTokens].filter((t) => !isNumericToken(t) && t.length >= 2);
+
+  let candidates = pool;
+  let how = scope;
+  const capOf = new Map();   // which capacity each candidate matched on
+
+  /* THE HEADER ITSELF MUST IDENTIFY A UNIT.
+     Without this, a column header that carries no capacity — "Qty", "Remarks",
+     a stray label the dictionary does not know — still scored above zero,
+     because the words being scored include the SHEET name's tokens, which
+     match every model in the family regardless of the header. The result was
+     one row matching hundreds or thousands of models, and since each match
+     becomes its own row, a few hundred parts expanded into over a million.
+     That is what "Invalid array length" was: a runaway allocation, not a size
+     limit. A capacity is the only thing that names a specific unit, so no
+     capacity means no match. */
+  if (!caps.length) {
+    return { mcq: [], denv: [], how: 'no capacity in header', count: 0 };
+  }
+
+  {
+    /* The capacity must appear AS A NUMBER. Leading zeros are inconsistent
+       between the header and the model name, so "29.1" and "029.1" are both
+       tried — and that is exactly what made a plain `includes` unsafe: "65.2"
+       sits inside "165.2", so a header for 065.2 also claimed the 165.2 unit
+       and the two headers came back sharing a model name. Real collisions in
+       the overview: 065.2/165.2 in lists 21 and 31, 049.2/149.2 and
+       057.2/157.2 in list 30. */
+    const wanted = [];
+    for (const c of caps) {
+      wanted.push(c);
+      const stripped = c.replace(/^0+/, '');
+      if (stripped && stripped !== c) wanted.push(stripped);
+      wanted.push('0' + c);
+    }
+    const exact = []; const loose = [];
+    for (const p of pool) {
+      for (const w of wanted) {
+        const q = capacityMatch(p.mcqNorm, w);
+        if (!q) continue;
+        capOf.set(p, w);
+        (q === 'exact' ? exact : loose).push(p);
+        break;
+      }
+    }
+    const hit = exact.length ? exact : loose;
+    if (hit.length) { candidates = hit; how = scope + '+capacity'; }
+    else return { mcq: [], denv: [], how: 'no capacity match', count: 0 };
+
+    /* ---- narrow by the variant letters that follow the capacity ----
+       "190S", "190X" and "190P" are three different builds, and without this
+       all three returned the same nine models. The letters after the capacity
+       carry that: the header says "S", the model says "TZ" + "SSB1". "TZ" is
+       the family marker, shared by every model in the list, so it is found as
+       the common prefix of all their tails and removed from both sides; what
+       remains is the variant. Families whose capacity is a decimal have no
+       letters directly after it, so they return "" here and are left to the
+       existing prefix/suffix rules. */
+    const famPrefix = commonPrefix(pool.map((p) => modelTail(p.mcqNorm)).filter(Boolean));
+    const attrNorm = String(attribute).toUpperCase().replace(/[^A-Z0-9.]/g, '');
+    let attrTail = tailAfter(attrNorm, capOf.get(candidates[0]) || '');
+    if (famPrefix && attrTail.indexOf(famPrefix) === 0) attrTail = attrTail.slice(famPrefix.length);
+
+    if (attrTail) {
+      const byVariant = candidates.filter((p) => {
+        let v = modelTail(p.mcqNorm);
+        if (famPrefix && v.indexOf(famPrefix) === 0) v = v.slice(famPrefix.length);
+        return v && v.indexOf(attrTail) === 0;
+      });
+      // Only narrow when it leaves something; never turn a match into nothing.
+      if (byVariant.length) { candidates = byVariant; how += '+build'; }
+    }
+  }
+
+  /* ---- narrow by variant, using EXACT tokens rather than substrings ----
+     Substring scoring cannot tell "XXN" from "XN": searching for XN finds it
+     inside XXN and both candidates tie, so a sheet covering ST-LN-XN kept the
+     XXN units too. The sheet name declares its variants as a list, so treat
+     them as a list — membership, not containment. */
+  const declared = tokens(sheetName).filter((t) => !isNumericToken(t));
+  const sheetSet = new Set(declared);
+  const attrSet = new Set(tokens(attribute).filter((t) => !isNumericToken(t)));
+
+  // (a) Suffix variant (ST / LN / XXN ...) must be one the sheet declares.
+  const bySuffix = candidates.filter((p) => p.suffixVar && sheetSet.has(p.suffixVar));
+  if (bySuffix.length) { candidates = bySuffix; how += '+variant'; }
+
+  /* (b) Prefix variant is whichever declared token the prefix ENDS with —
+     "ALSFSE" ends with SE, "ALSFXE" with XE. Longest match wins so a two-letter
+     token cannot shadow a longer one. */
+  const prefixVar = (p) => declared
+    .filter((t) => p.prefix.endsWith(t))
+    .sort((a, b) => b.length - a.length)[0] || '';
+
+  const present = new Set(candidates.map(prefixVar).filter(Boolean));
+  if (present.size > 1) {
+    const wanted = new Set();
+    for (const t of attrSet) for (const v of (VARIANT_SYNONYMS[t] || [])) wanted.add(v);
+
+    if (wanted.size) {
+      // The header names a qualifier: "ALS F 241.2 Econ" -> the XE build.
+      const byQual = candidates.filter((p) => wanted.has(prefixVar(p)));
+      if (byQual.length) { candidates = byQual; how += '+qualifier'; }
+    } else {
+      /* No qualifier, and the sheet covers more than one build. The sheet name
+         lists them in order — "SE-XE" — and the first is the base build, which
+         is what an unqualified header means. */
+      const first = declared.find((t) => present.has(t));
+      const byDefault = candidates.filter((p) => prefixVar(p) === first);
+      if (byDefault.length && byDefault.length < candidates.length) {
+        candidates = byDefault;
+        how += '+default(' + first + ')';
+      }
+    }
+  }
+
+  // Score on the remaining words; keep every candidate on the top score.
+  let bestScore = -1;
+  const scored = candidates.map((p) => {
+    let sc = 0;
+    for (const w of words) if (p.mcqNorm.includes(w)) sc++;
+    if (sc > bestScore) bestScore = sc;
+    return { p, sc };
+  });
+  let winners = scored.filter((x) => x.sc === bestScore).map((x) => x.p);
+
+  /* Nothing in the name agreed — the capacity alone is not enough to claim a
+     match, since the same number appears across unrelated families. */
+  if (bestScore <= 0) {
+    return { mcq: [], denv: [], how: how + ' (no name agreement)', count: 0 };
+  }
+
+  /* Belt to the braces above. A header should resolve to a handful of units;
+     dozens means the keys failed to discriminate, and returning them would
+     multiply the sheet without telling anyone anything. The count is still
+     reported so QA_Model_Map shows what happened. */
+  if (winners.length > MAX_MODEL_MATCHES) {
+    return { mcq: [], denv: [], how: `${how} (${winners.length} matches — too ambiguous)`, count: 0 };
+  }
+
+  return {
+    mcq: winners.map((p) => p.mcq),
+    denv: winners.map((p) => p.denv),
+    how: bestScore > 0 ? how + '+name' : how,
+    count: winners.length,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Driver
+ * ------------------------------------------------------------------ */
+const COLS = ['Source File', 'Sheet', 'Section', ...DESCRIPTOR_ORDER, 'Attribute', 'Value'];
+const MAP_COLS = ['MCQ-Modelname', 'DENV-Modelname', 'Model #', 'Model Match'];
+
+/* CSV, built in chunks. One string per ~8,000 rows keeps the peak allocation
+   small; the Blob is assembled from the pieces without ever holding the whole
+   file as a single JavaScript string. */
+function csvChunks(objs, cols) {
+  const esc = (v) => {
+    const t = v === undefined || v === null ? '' : String(v);
+    return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const chunks = [];
+  let buf = cols.map(esc).join(',') + '\r\n';
+  for (let i = 0; i < objs.length; i++) {
+    const o = objs[i];
+    const line = new Array(cols.length);
+    for (let c = 0; c < cols.length; c++) line[c] = esc(o[cols[c]]);
+    buf += line.join(',') + '\r\n';
+    if ((i & 8191) === 8191) { chunks.push(buf); buf = ''; }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+function aoaFromObjects(objs, cols) {
+  const out = [cols];
+  for (const o of objs) out.push(cols.map((c) => (o[c] === undefined ? '' : o[c])));
+  return out;
+}
+
+self.onmessage = async (e) => {
+  const { files, keepDash } = e.data;
+  /* 'old' (MCQ-era lists + overview map) or 'new' (EWAD lists that carry
+     their own model names). The map only means something to the old format,
+     so in new format it is ignored even if one was supplied. */
+  const format = e.data.format === 'new' ? 'new' : 'old';
+  const mapFile = format === 'old' ? e.data.mapFile : null;
+  const newNames = [];     // per-column model-name audit, new format only
+  const started = Date.now();
+
+  try {
+    /* Optional overview workbook. Without it the tool behaves exactly as
+       before and the three mapping columns are simply absent. */
+    let modelMap = null;
+    let mapNote = '';
+    if (mapFile && mapFile.buffer && mapFile.buffer.byteLength) {
+      try {
+        const mwb = XLSX.read(mapFile.buffer, { type: 'array' });
+        modelMap = buildModelMap(mwb.Sheets[mwb.SheetNames[0]]);
+        mapNote = `${modelMap.pairs} model pairs from ${mapFile.name}`;
+        if (!modelMap.pairs) { modelMap = null; mapNote = `no MCQ/DENV pairs found in ${mapFile.name}`; }
+      } catch (err) {
+        modelMap = null;
+        mapNote = `could not read ${mapFile.name}: ${err.message}`;
+      }
+    }
+    const rows = [];
+    const log = [];
+    let done = 0;
+    const totalUnits = files.length;
+
+    for (const f of files) {
+      let wb;
+      try {
+        // cellDates so date cells arrive as Date, matching the Python.
+        wb = XLSX.read(f.buffer, { type: 'array', cellDates: true, dense: false });
+      } catch (err) {
+        log.push({ 'Source File': f.name, 'Sheet': '', 'Rows': 0, 'Status': `OPEN FAILED: ${err.message}` });
+        done++;
+        self.postMessage({ type: 'progress', fraction: done / totalUnits, label: f.name });
+        continue;
+      }
+
+      for (const sheetName of wb.SheetNames) {
+        const lower = sheetName.toLowerCase();
+        if (SHEET_BLACKLIST.some((b) => lower.includes(b))) {
+          log.push({ 'Source File': f.name, 'Sheet': sheetName, 'Rows': 0, 'Status': 'skipped (blacklist)' });
+          continue;
+        }
+        try {
+          const got = format === 'new'
+            ? extractSheetNew(wb.Sheets[sheetName], f.name, sheetName, keepDash)
+            : extractSheet(wb.Sheets[sheetName], f.name, sheetName, keepDash);
+          const recs = got.rows;
+          const headerVariants = got.headerVariants;
+          if (got.names) for (const n of got.names) newNames.push(n);
+          if (recs.length) {
+            for (const r of recs) rows.push(r);
+            let status = `ok (${headerVariants} header layout(s))`;
+            if (format === 'new' && got.names) {
+              const missing = got.names.filter((n) => !n['DENV-Modelname']).length;
+              const flagged = got.names.filter((n) => /^check:/.test(n['Model Match'])).length;
+              if (missing) status += ` · ${missing} column(s) with no model name`;
+              if (flagged) status += ` · ${flagged} model name(s) to check`;
+              /* Rows above the first section label in column A. EWAD-MZB's
+                 DUAL "XS" and "PS" sheets simply omit the COMPRESSOR label
+                 that the SS sheet carries, so their first block of parts has
+                 no section. Naming it here would be inventing it; reporting
+                 the count puts it where someone can fix the workbook. */
+              if (got.blankSection) status += ` · ${got.blankSection} row(s) before the first section label`;
+            }
+            log.push({ 'Source File': f.name, 'Sheet': sheetName, 'Rows': recs.length, 'Status': status });
+          } else {
+            log.push({ 'Source File': f.name, 'Sheet': sheetName, 'Rows': 0, 'Status': 'no parts table found' });
+          }
+        } catch (err) {
+          log.push({ 'Source File': f.name, 'Sheet': sheetName, 'Rows': 0, 'Status': `ERROR: ${err.message}` });
+        }
+      }
+      done++;
+      self.postMessage({ type: 'progress', fraction: done / totalUnits, label: f.name });
+    }
+
+    /* --- canonicalise model codes: "MNG171.2 Econ" -> "MNG 171.2 Econ" ---
+       Codes are keyed on their letters and digits alone, and the spelling
+       from the FIRST time that key appears wins. Repeated page headers often
+       carry typos, and the top-of-sheet header is the reliable one. */
+    const best = new Map();
+    for (const r of rows) {
+      const key = String(r['Attribute']).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!best.has(key)) best.set(key, r['Attribute']);
+    }
+    const renames = new Map();
+    for (const r of rows) {
+      const key = String(r['Attribute']).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const canon = best.get(key);
+      r['Attribute Raw'] = r['Attribute'];
+      if (canon && canon !== r['Attribute']) {
+        renames.set(`${r['Source File']}\u0001${r['Sheet']}\u0001${r['Attribute']}\u0001${canon}`, {
+          'Source File': r['Source File'], 'Sheet': r['Sheet'],
+          'Attribute Raw': r['Attribute'], 'Attribute': canon,
+        });
+        r['Attribute'] = canon;
+      }
+    }
+
+    /* --- model name mapping ---------------------------------------------
+       Matching is per distinct file + sheet + column header, not per row: a
+       sheet with 1,650 rows has ten distinct headers, so this runs ten times
+       rather than 1,650. */
+    const mapCache = new Map();
+    const mapAudit = new Map();
+    if (format === 'new') {
+      for (const n of newNames) {
+        mapAudit.set(`${n['Source File']}\u0001${n['Sheet']}\u0001${n['Column']}`, n);
+      }
+    }
+    if (modelMap) {
+      for (const r of rows) {
+        const key = `${r['Source File']}\u0001${r['Sheet']}\u0001${r['Attribute']}`;
+        let hit = mapCache.get(key);
+        if (hit === undefined) {
+          hit = matchModels(modelMap, r['Source File'], r['Sheet'], r['Attribute']);
+          mapCache.set(key, hit);
+          mapAudit.set(key, {
+            'Source File': r['Source File'], 'Sheet': r['Sheet'], 'Attribute': r['Attribute'],
+            'Matches': hit ? hit.count : 0,
+            'MCQ-Modelname': hit ? joinNames(hit.mcq) : '',
+            'DENV-Modelname': hit ? joinNames(hit.denv) : '',
+            'Model Match': hit ? hit.how : 'no map',
+          });
+        }
+        r['MCQ-Modelname'] = hit ? joinNames(hit.mcq) : '';
+        r['DENV-Modelname'] = hit ? joinNames(hit.denv) : '';
+        r['Model Match'] = hit ? `${hit.count} · ${hit.how}` : 'no match';
+      }
+    }
+
+    /* --- one row per matched model ---------------------------------------
+       A header that matches several units produced one cell holding
+       "A / B / C", which cannot be filtered, sorted, pivoted or looked up.
+       Each match now gets its own row.
+
+       Every other cell is REPEATED on those rows, not left blank. Blank
+       carried-down cells look tidier in a printed sheet and are wrong for
+       everything else: a filter on DENV-Modelname returns rows with no part
+       number, a sort scatters the continuation rows away from their parent,
+       and a pivot cannot attribute a blank-keyed row to anything. A repeated
+       value costs a little file size and survives all three.
+
+       `Model #` numbers the models within one match, so the group is still
+       identifiable after the sheet has been sorted, and `Model Match` repeats
+       the count so "1 of 4" is readable on every row. */
+    let expandedRows = rows;
+    let expandedCount = 0;
+    if (modelMap) {
+      expandedRows = [];
+      for (const r of rows) {
+        const mcq = String(r['MCQ-Modelname'] || '').split(' / ').filter(Boolean);
+        const denv = String(r['DENV-Modelname'] || '').split(' / ').filter(Boolean);
+        const n = Math.max(mcq.length, denv.length);
+        if (n <= 1) { r['Model #'] = n ? '1' : ''; expandedRows.push(r); continue; }
+        for (let i = 0; i < n; i++) {
+          const copy = { ...r };
+          copy['MCQ-Modelname'] = mcq[i] || '';
+          copy['DENV-Modelname'] = denv[i] || '';
+          copy['Model #'] = String(i + 1);
+          if (i > 0) expandedCount++;
+          expandedRows.push(copy);
+        }
+      }
+    }
+
+    /* Headers treated as models that may really be descriptors — the early
+       warning that a workbook uses a spelling the dictionary does not know. */
+    const flags = new Map();
+    for (const r of rows) {
+      if (SUSPECT_HEADER.test(r['Attribute'])) {
+        flags.set(`${r['Source File']}\u0001${r['Attribute']}`, {
+          'Source File': r['Source File'], 'Unrecognised header': r['Attribute'],
+        });
+      }
+    }
+
+    /* Model summary: rows per file / sheet / model. */
+    const summary = new Map();
+    for (const r of rows) {
+      const k = `${r['Source File']}\u0001${r['Sheet']}\u0001${r['Attribute']}`;
+      const cur = summary.get(k);
+      if (cur) cur.Rows++;
+      else summary.set(k, { 'Source File': r['Source File'], 'Sheet': r['Sheet'], 'Attribute': r['Attribute'], 'Rows': 1 });
+    }
+
+    self.postMessage({ type: 'progress', fraction: 1, label: 'Writing the workbook' });
+
+    const wbOut = XLSX.utils.book_new();
+    const outCols = rows.length
+      ? [...COLS, 'Attribute Raw', ...((modelMap || format === 'new') ? MAP_COLS : [])]
+      : COLS;
+
+    if (expandedRows.length > MAX_OUTPUT_ROWS) {
+      throw new Error(
+        `${expandedRows.length.toLocaleString()} rows is more than any spreadsheet holds. `
+        + `The extraction found ${rows.length.toLocaleString()} rows and the model split added the rest — `
+        + `check QA_Model_Map for a column header matching an implausible number of models, `
+        + `or run without the model map.`);
+    }
+
+    /* Big results go out as CSV. The parts table is the only large sheet; the
+       log and the QA sheets are a few hundred rows and stay in a workbook, so
+       nothing is lost by splitting them into two files. */
+    const cells = expandedRows.length * outCols.length;
+    const asCsv = cells > XLSX_CELL_BUDGET;
+    let csvBlob = null;
+
+    if (asCsv) {
+      csvBlob = new Blob(csvChunks(expandedRows, outCols), { type: 'text/csv;charset=utf-8;' });
+    } else {
+      XLSX.utils.book_append_sheet(wbOut,
+        XLSX.utils.aoa_to_sheet(aoaFromObjects(expandedRows, outCols)), 'Parts_Long');
+    }
+    XLSX.utils.book_append_sheet(wbOut,
+      XLSX.utils.aoa_to_sheet(aoaFromObjects(log, ['Source File', 'Sheet', 'Rows', 'Status'])), 'Extraction_Log');
+    if (flags.size) {
+      XLSX.utils.book_append_sheet(wbOut,
+        XLSX.utils.aoa_to_sheet(aoaFromObjects([...flags.values()], ['Source File', 'Unrecognised header'])), 'QA_Check_Headers');
+    }
+    if (renames.size) {
+      XLSX.utils.book_append_sheet(wbOut,
+        XLSX.utils.aoa_to_sheet(aoaFromObjects([...renames.values()], ['Source File', 'Sheet', 'Attribute Raw', 'Attribute'])), 'QA_Model_Renames');
+    }
+    if (rows.length) {
+      XLSX.utils.book_append_sheet(wbOut,
+        XLSX.utils.aoa_to_sheet(aoaFromObjects([...summary.values()], ['Source File', 'Sheet', 'Attribute', 'Rows'])), 'Model_Summary');
+    }
+    if (mapAudit.size) {
+      /* One row per column header rather than per data row: this is the sheet
+         to eyeball once to confirm the matching is sane, and it is a few dozen
+         rows rather than tens of thousands. */
+      XLSX.utils.book_append_sheet(wbOut,
+        XLSX.utils.aoa_to_sheet(aoaFromObjects([...mapAudit.values()],
+          ['Source File', 'Sheet', 'Column', 'Attribute', 'Matches', 'MCQ-Modelname', 'DENV-Modelname', 'Model Match'])),
+        'QA_Model_Map');
+    }
+
+    const buf = XLSX.write(wbOut, { bookType: 'xlsx', type: 'array' });
+
+    self.postMessage({
+      type: 'done',
+      buffer: buf,
+      csvBlob,
+      asCsv,
+      cells,
+      rowCount: rows.length,
+      outRowCount: expandedRows.length,
+      expandedCount,
+      log,
+      flagCount: flags.size,
+      renameCount: renames.size,
+      mapNote,
+      format,
+      mapped: mapAudit.size ? [...mapAudit.values()].filter((a) => a.Matches > 0).length : 0,
+      flaggedNames: [...mapAudit.values()].filter((a) => /^check:/.test(a['Model Match'])).length,
+      mapTotal: mapAudit.size,
+      ms: Date.now() - started,
+    }, [buf]);
+  } catch (err) {
+    self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
+  }
+};

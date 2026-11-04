@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" data-loading>
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts List Extractor - DAME HUB</title>
+<link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="stylesheet" href="/dame-hub/tools/assets/tl-legacy.css">
+<link rel="stylesheet" href="/dame-hub/tools/parts-extractor/styles.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">
+<script src="/dame-hub/core/v1/config.js" defer></script>
+<script src="/dame-hub/core/v1/api.js" defer></script>
+<script src="/dame-hub/core/v1/core.js" defer></script>
+<script src="/dame-hub/tools/assets/tl.js" defer></script>
+<script src="/dame-hub/tools/vendor/xlsx/xlsx.full.min.js" defer></script>
+<script src="/dame-hub/tools/parts-extractor/parts-extractor.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header id="topbar"></header>
+
+  <main id="main" class="wrap">
+    <p class="hub-back"><a href="/dame-hub/tools/">&larr; Tools</a></p>
+    <div class="page-head">
+      <p class="eyebrow">Tools</p>
+      <h1>Parts List Extractor</h1>
+      <p class="page-head__lede">Many parts-list workbooks in, one long table out</p>
+      <p>Drop in a set of spare parts list workbooks. Every sheet is scanned, the header
+         row is found wherever it sits, the varying spellings are mapped to one schema,
+         merged cells are expanded, and the per-model quantity columns are unpivoted into
+         Attribute and Value. Everything runs in your browser — nothing is uploaded.</p>
+    </div>
+
+    <!-- 0 — File format. Chosen first because it decides which panels apply. -->
+    <section class="panel" aria-labelledby="step-format">
+      <div class="panel__head"><h2 id="step-format">File format</h2></div>
+      <div class="segmented" role="group" aria-label="File format" id="format-toggle">
+        <button type="button" data-format="old" aria-pressed="true">Old format · MCQ</button>
+        <button type="button" data-format="new" aria-pressed="false">New format · EWAD</button>
+      </div>
+      <p class="hint pe-format-note" id="format-note"></p>
+    </section>
+
+    <!-- 1 — Workbooks -->
+    <section class="panel" aria-labelledby="step-files">
+      <div class="panel__head"><h2 id="step-files">Workbooks</h2></div>
+
+      <div id="dropzone" class="pe-drop" tabindex="0" role="button"
+           aria-label="Choose workbooks or drop them here">
+        <p class="pe-drop__title">Choose workbooks or drop them here</p>
+        <p class="pe-drop__hint">.xlsx, .xlsm and legacy .xls · add as many as you like</p>
+      </div>
+      <input type="file" id="file-input" accept=".xls,.xlsx,.xlsm" multiple class="sr-only">
+
+      <ul class="pe-files" id="file-list"></ul>
+      <p class="hint" id="file-note">No workbooks chosen yet.</p>
+    </section>
+
+    <!-- 1b — Model name map. Old format only: new-format sheets carry their
+         own model names, so this panel is hidden rather than left to confuse. -->
+    <section class="panel" aria-labelledby="step-map" id="map-panel">
+      <div class="panel__head"><h2 id="step-map">Model name map <span class="pe-optional">optional</span></h2></div>
+      <p class="muted">Add the Parts List Overview workbook and each row gains its DENV
+        model name. The parts lists name a unit by its column header (<code>MNG Mono 029.1</code>);
+        the overview maps a full MCQ name to its DENV equivalent. The link is rebuilt from the
+        parts list number in the file name, the capacity in the column header, and the sheet name.</p>
+
+      <div id="map-drop" class="pe-drop pe-drop--slim" tabindex="0" role="button"
+           aria-label="Choose the overview workbook or drop it here">
+        <p class="pe-drop__title">Choose the overview workbook</p>
+        <p class="pe-drop__hint">the file with MCQ-Modelname and DENV-Modelname columns</p>
+      </div>
+      <input type="file" id="map-input" accept=".xls,.xlsx,.xlsm" class="sr-only">
+      <p class="hint" id="map-note">No map chosen — the DENV column will be left out.</p>
+    </section>
+
+    <!-- 2 — Options -->
+    <section class="panel" aria-labelledby="step-options">
+      <div class="panel__head"><h2 id="step-options">Options</h2></div>
+      <label class="check pe-check">
+        <input type="checkbox" id="keep-dash" checked>
+        <span>Keep “-” and “0” cells<em>Off means fitted parts only — cells reading “-” or “0” are dropped</em></span>
+      </label>
+
+      <div class="toolbar pe-run" role="group" aria-label="Extraction">
+        <button type="button" class="btn btn--primary" id="run-btn" disabled>Extract</button>
+        <span class="pe-run__note" id="run-note" role="status" aria-live="polite">Add at least one workbook.</span>
+      </div>
+
+      <div class="pe-progress" id="progress" hidden>
+        <div class="pe-progress__row">
+          <div class="meter" role="progressbar" id="progress-bar"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+               aria-labelledby="progress-text"><span id="progress-fill"></span></div>
+          <span class="pe-progress__pct" id="progress-pct">0%</span>
+          <button type="button" class="btn btn--ghost btn--sm" id="cancel-btn">Cancel</button>
+        </div>
+        <p class="pe-progress__text" id="progress-text" role="status" aria-live="polite">Starting…</p>
+      </div>
+    </section>
+
+    <!-- 3 — Result -->
+    <section class="panel" id="result-panel" aria-labelledby="step-result" hidden>
+      <div class="panel__head">
+        <h2 id="step-result">Result</h2>
+        <div class="toolbar">
+          <button type="button" class="btn btn--primary" id="download-btn">Download Excel</button>
+          <button type="button" class="btn" id="download-qa-btn" hidden>Download log &amp; QA</button>
+          <button type="button" class="btn btn--ghost" id="clear-btn">Clear</button>
+        </div>
+      </div>
+      <div class="stat-grid" id="result-stats"></div>
+      <div class="table-wrap">
+        <table class="data pe-log">
+          <thead><tr><th>Source file</th><th>Sheet</th><th>Rows</th><th>Status</th></tr></thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+      <p class="hint">Every sheet is listed, including the ones that produced nothing.
+        A sheet you expected showing “no parts table found” means its header row uses a
+        spelling the dictionary does not know yet.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="tips">
+      <div class="panel__head"><h2 id="tips">What comes out</h2></div>
+      <p class="muted"><strong>Parts_Long</strong> is the table itself — source file, sheet,
+        section banner, the nine descriptor columns, then Attribute (the model code) and
+        Value (the quantity). <strong>Extraction_Log</strong> lists every sheet and what
+        happened to it. <strong>QA_Check_Headers</strong> flags columns treated as models
+        that look like descriptors — the early warning that a new spelling has appeared.
+        <strong>QA_Model_Renames</strong> shows where a model code was spelled two ways and
+        which spelling won. <strong>Model_Summary</strong> counts rows per file, sheet and
+        model.</p>
+    </section>
+  </main>
+</body>
+</html>

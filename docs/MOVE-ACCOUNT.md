@@ -12,7 +12,7 @@ What changes: the address (`https://niyaz8951.github.io/...` becomes `https://<n
 ## The only places the account name appears
 Keep this list complete; the admin project adds to it if anything new ever needs the name.
 1. Supabase, every project: **Authentication > URL Configuration** (Site URL, redirect URLs).
-2. Docs in `dame-hub/docs/**/*.md` (including the tile project instructions in `docs/tiles/`), `dame-hub/README.md`, `dame-hub/demo/docs/*.md` and every tile's `docs/*.md` and README (text only).
+2. Docs in `dame-hub/docs/**/*.md` (including the tile project instructions in `docs/tiles/`), `dame-hub/README.md`, `dame-hub/demo/docs/*.md`, `dame-hub/tools/docs/*.md` and every tile's `docs/*.md` and README (text only).
 3. Each Claude project's instructions and its GitHub connection.
 4. Collaborators on each tile repo (people, not text).
 

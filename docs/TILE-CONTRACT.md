@@ -8,7 +8,7 @@ Tile id: lower case with dashes, e.g. `hvac-notes`.
 | Where | Form | Example |
 |---|---|---|
 | GitHub repo | `<account>/<tile-id>` (today `niyaz8951`) | `niyaz8951/hvac-notes` |
-| Address | `/<tile-id>/` | `https://niyaz8951.github.io/hvac-notes/` |
+| Address | `/<tile-id>/` (a tile kept inside the admin repo: `/dame-hub/<tile-id>/`, `docs/STANDARDS.md` section 2) | `https://niyaz8951.github.io/hvac-notes/` |
 | Database schema | `<tile_id>` | `hvac_notes` |
 | Function prefix | `public.<tile_id>_` | `public.hvac_notes_ask` |
 | Storage bucket | `<tile-id>` (private) | `hvac-notes` |

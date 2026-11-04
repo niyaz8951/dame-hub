@@ -69,6 +69,6 @@ A free project pauses after a week without use; open the dashboard once a week o
 `docs/MOVE-ACCOUNT.md` (GitHub) and the Supabase organization `DAME`: invite IT as Owner, then remove yourself. The site keeps working throughout; only the address changes if the GitHub account moves.
 
 ## Local run and tests
-- `node tools/serve.mjs` in `dame-hub`: `http://localhost:8080/dame-hub/` plus every sibling repo at `/<tile-id>/` (and `demo/` from this repo). Local pages talk to `STAGING` from `config.js`.
-- `tools/test/run.sh`: full local test with a throw-away Postgres standing in for Supabase (SQL tests, demo tests, security check, browser run). See the header of the script for what it needs.
+- `node dev/serve.mjs` in `dame-hub`: `http://localhost:8080/dame-hub/` plus every sibling repo at `/<tile-id>/` (tiles inside this repo, `demo` and `tools`, at `/dame-hub/<tile-id>/`). Local pages talk to `STAGING` from `config.js`.
+- `dev/test/run.sh`: full local test with a throw-away Postgres standing in for Supabase (SQL tests, demo tests, security check, browser run). See the header of the script for what it needs.
 - `db/core/tests.sql` and `demo/db/demo/tests.sql` can also be pasted into the staging SQL editor; they roll back and print `ALL ... TESTS PASSED`.

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Local server with the GitHub Pages layout:
 //   http://localhost:8080/dame-hub/   -> this repo
-//   http://localhost:8080/<tile-id>/  -> the sibling folder ../<tile-id> (a tile repo cloned next to dame-hub),
-//                                        or, for a tile kept inside this repo (the demo), ./<tile-id>
-// No dependencies. Run from anywhere: node tools/serve.mjs [port]
+//   http://localhost:8080/<tile-id>/  -> the sibling folder ../<tile-id> (a tile repo cloned next to dame-hub)
+//   Tiles kept inside this repo (demo, tools) are simply part of /dame-hub/, as on GitHub Pages.
+// No dependencies. Run from anywhere: node dev/serve.mjs [port]
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -25,8 +25,6 @@ function root(id) {
   if (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(id)) return null;
   const sibling = join(parent, id);
   if (existsSync(join(sibling, 'index.html'))) return sibling;
-  const inside = join(hub, id);
-  if (existsSync(join(inside, 'index.html'))) return inside;
   return null;
 }
 

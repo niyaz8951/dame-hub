@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.."
 DB=$(echo "$PGARGS" | sed -n 's/.*-d \([^ ]*\).*/\1/p')
 ADMIN=$(echo "$PGARGS" | sed "s/-d $DB/-d postgres/")
 psql $ADMIN -qc "drop database if exists $DB" ; psql $ADMIN -qc "create database $DB"
-psql $PGARGS -q -v ON_ERROR_STOP=1 -f tools/test/supabase-stub.sql
+psql $PGARGS -q -v ON_ERROR_STOP=1 -f dev/test/supabase-stub.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/001_init.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/002_email_domain.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/003_email_domain.sql
@@ -21,8 +21,8 @@ psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/seed-staging.sql > /dev/null
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f demo/db/demo/001_init.sql > /dev/null
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f demo/db/demo/tests.sql 2>&1 | grep -E 'ERROR|PASSED'
 psql $PGARGS -c "select * from core.security_check()"
-mkdir -p tools/test/out
-node tools/test/mock-supabase.mjs > tools/test/out/mock.log 2>&1 & MOCK=$!
+mkdir -p dev/test/out
+node dev/test/mock-supabase.mjs > dev/test/out/mock.log 2>&1 & MOCK=$!
 sleep 1
-PGARGS="$PGARGS" node tools/test/e2e.mjs || true
+PGARGS="$PGARGS" node dev/test/e2e.mjs || true
 kill $MOCK

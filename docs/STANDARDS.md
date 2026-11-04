@@ -24,7 +24,8 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - **One address**, so the session kept by `core.js` is shared by every tile.
 - **No account name anywhere in code or data.** The core is always at `/dame-hub/`, tiles at `/<tile-id>/`. Pages use root-relative paths (`/dame-hub/core/v1/core.js`, `/<tile-id>/page.html`); the database stores tile ids, never URLs. Moving to another account is a repo transfer (`docs/MOVE-ACCOUNT.md`).
 - **Environments:** `core/v1/config.js` has a `LIVE` and a `STAGING` entry and uses `STAGING` when the host is `localhost`. Until a staging project exists, `STAGING` points at the same project as `LIVE` (see `docs/STATUS.md`); once it exists, only `config.js` changes. Claude never tests against the live project once the team uses the site.
-- **Local run:** clone `dame-hub` and the tile repos side by side; `node tools/serve.mjs` in `dame-hub` serves it at `http://localhost:8080/dame-hub/` and each sibling repo at `/<tile-id>/`, the same layout as GitHub Pages.
+- **Tiles inside the admin repo:** a tile the owner keeps in `dame-hub` itself (today `demo`, `tools`) lives in the folder `dame-hub/<tile-id>/` and is served at `/dame-hub/<tile-id>/`. `core/v1/config.js` lists these ids in `INSIDE_CORE`; `Core.tilePath(id)` gives the path and the dashboard uses it. Everything else about the tile (id, guard, schema, bucket, docs) is the same as for a sibling repo; such a tile is run by the owner and the admin project, and can move out to its own repo later by removing it from `INSIDE_CORE`.
+- **Local run:** clone `dame-hub` and the tile repos side by side; `node dev/serve.mjs` in `dame-hub` serves it at `http://localhost:8080/dame-hub/` and each sibling repo at `/<tile-id>/`, the same layout as GitHub Pages (tiles inside the admin repo come with it, at `/dame-hub/<tile-id>/`).
 - **Who runs what:** the owner runs the GitHub account, `dame-hub` and Supabase, and applies every SQL file. Each tile repo has its team as collaborators with write access to that repo only. A tile id never reuses the name of another repo in the account.
 
 ## 3. Users and roles
@@ -68,7 +69,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - Every function refuses correctly and has a test proving it.
 
 ## 8. Testing
-- Playwright against `node tools/serve.mjs` (`http://localhost:8080/dame-hub/`) + the staging project.
+- Playwright against `node dev/serve.mjs` (`http://localhost:8080/dame-hub/`) + the staging project.
 - `db/<schema>/tests.sql`, run on staging: for each function one allowed call and refused calls for signed out, pending, disabled, no tile, no right, another user's record.
 - Demo accounts on staging only (`demo_admin`, `demo_user`, `demo_pending`, `demo_none`), from `db/core/seed-staging.sql`. Demo data is invented, never copied from real work.
 

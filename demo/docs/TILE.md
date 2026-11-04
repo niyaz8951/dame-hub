@@ -1,6 +1,6 @@
 # Demo tile
 
-Tile id `demo` - path `/demo/` - schema `demo` - functions `public.demo_*` - private bucket `demo`.
+Tile id `demo` - path `/dame-hub/demo/` (inside the admin repo) - schema `demo` - functions `public.demo_*` - private bucket `demo`.
 
 ## What it does
 Shows what the core gives a page (`Core.user`), a list of notes anyone with the tile can read, an add/delete form for users with the right `edit`, two buttons that call functions the database refuses, and a private file area under `<username>/`.
@@ -19,4 +19,4 @@ Shows what the core gives a page (`Core.user`), a list of notes anyone with the 
 - `demo_manage()` - needs the right `manage`, which the tile does not declare: always `NO_RIGHT` except for the super user.
 
 ## Decisions
-- Lives in `dame-hub/demo/` so it moves with the core. Local: `node tools/serve.mjs` serves it at `/demo/`. Live: once the repo `demo` exists in the account.
+- Lives in `dame-hub/demo/` so it moves with the core, served at `/dame-hub/demo/` live and locally (`INSIDE_CORE` in `core/v1/config.js`, since 2026-11-04). No `demo` repo is needed.
