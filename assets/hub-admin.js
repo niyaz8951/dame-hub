@@ -136,7 +136,7 @@
           } } });
         var icon = Core.ICONS.indexOf(t.icon) >= 0 ? t.icon : 'tile';
         var tr = el('tr', null,
-          el('td', null, el('div', { class: 'row' }, el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true' }), el('div', null, el('div', null, el('strong', { text: t.name })), el('div', { class: 'faint mono', text: '/' + t.id + '/' })))),
+          el('td', null, el('div', { class: 'row' }, el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) }), el('div', null, el('div', null, el('strong', { text: t.name })), el('div', { class: 'faint mono', text: '/' + t.id + '/' })))),
           el('td', null, sw),
           el('td', { text: t.rights.length ? t.rights.join(', ') : '-' }),
           el('td', { text: String(t.users) }),
@@ -153,19 +153,27 @@
 
   function tileForm(t) {
     var isNew = !t;
-    t = t || { id: '', name: '', tagline: '', icon: 'tile', sort_order: 100, rights: [] };
+    t = t || { id: '', name: '', tagline: '', icon: 'tile', accent: 'blue', sort_order: 100, rights: [] };
     function field(id, label, value, hint, attrs) {
       var input = el('input', Object.assign({ id: 'tf-' + id, value: value }, attrs || {}));
       return el('div', { class: 'field' }, el('label', { for: 'tf-' + id, text: label }), input, hint ? el('span', { class: 'hint', text: hint }) : null);
     }
     var iconSel = el('select', { id: 'tf-icon' });
     Core.ICONS.forEach(function (i) { iconSel.appendChild(el('option', { value: i, text: i, selected: i === t.icon })); });
+    var accentSel = el('select', { id: 'tf-accent' });
+    Core.ACCENTS.forEach(function (c) { accentSel.appendChild(el('option', { value: c, text: c, selected: c === t.accent })); });
+    var swatch = el('span', { class: 'icon i-' + t.icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) });
+    function preview() { swatch.className = 'icon i-' + iconSel.value; swatch.setAttribute('data-accent', accentSel.value); }
+    iconSel.addEventListener('change', preview); accentSel.addEventListener('change', preview);
     var err = el('p', { class: 'notice danger', hidden: true });
     var body = el('div', null,
       field('id', 'Tile id', t.id, 'Lower case, digits and dashes; the repo name and the path /<tile-id>/. Cannot change later.', { maxlength: 30, disabled: !isNew, autocapitalize: 'none', spellcheck: 'false' }),
       field('name', 'Name', t.name, null, { maxlength: 40 }),
       field('tagline', 'Tagline', t.tagline, 'Neutral, one line.', { maxlength: 80 }),
-      el('div', { class: 'field' }, el('label', { for: 'tf-icon', text: 'Icon' }), iconSel),
+      el('div', { class: 'row' },
+        el('div', { class: 'field grow' }, el('label', { for: 'tf-icon', text: 'Icon' }), iconSel),
+        el('div', { class: 'field grow' }, el('label', { for: 'tf-accent', text: 'Colour' }), accentSel, el('span', { class: 'hint', text: 'The tile\'s hue on the dashboard and inside it.' })),
+        el('div', { class: 'field' }, el('label', { text: 'Preview' }), swatch)),
       field('order', 'Order', String(t.sort_order), 'Lower comes first on the dashboard.', { type: 'number', min: 0, max: 9999 }),
       field('rights', 'Rights', t.rights.join(', '), 'Comma-separated, as declared in the tile\'s docs/TILE.md (e.g. edit, export). Removing one removes it from every user.', { autocapitalize: 'none', spellcheck: 'false' }),
       err);
@@ -173,7 +181,7 @@
       { label: 'Cancel', value: false },
       { label: 'Save', kind: 'primary', onClick: function () {
         var params = { p_id: isNew ? body.querySelector('#tf-id').value : t.id, p_name: body.querySelector('#tf-name').value,
-          p_tagline: body.querySelector('#tf-tagline').value, p_icon: iconSel.value,
+          p_tagline: body.querySelector('#tf-tagline').value, p_icon: iconSel.value, p_accent: accentSel.value,
           p_sort_order: parseInt(body.querySelector('#tf-order').value, 10) || 100,
           p_rights: body.querySelector('#tf-rights').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) };
         return Api.rpc('core_admin_tile_save', params).then(function () { Core.toast('Saved', 'success'); loadTiles(); return true; },

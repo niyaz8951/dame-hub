@@ -13,6 +13,7 @@ Tile id: lower case with dashes, e.g. `hvac-notes`.
 | Function prefix | `public.<tile_id>_` | `public.hvac_notes_ask` |
 | Storage bucket | `<tile-id>` (private) | `hvac-notes` |
 | Guard | `{ tile: '<tile-id>' }` | `Core.requireLogin({ tile: 'hvac-notes' })` |
+| Accent | one of `Core.ACCENTS`, set in the admin page | `green` -> `<html data-accent="green">` |
 | SQL files | `db/<tile_id>/NNN_*.sql` | `db/hvac_notes/001_init.sql` |
 
 ## 2. What the core gives every tile
@@ -27,6 +28,7 @@ The tile id must not be the name of any other repo in the account.
 - `Api.file.upload(bucket, path, blob)`, `Api.file.url(bucket, path)`, `Api.file.download(bucket, path)`, `Api.file.remove(bucket, path)` - Storage through the session; the bucket's policies decide.
 - `Core.el(tag, attrs, ...children)`, `Core.sheet(...)`, `Core.toast(text)`, `Core.date(value)`, `Core.download(name, blob)`, `Core.setTitle(text)`, `Core.errorMessage(err)`.
 - Theme tokens in `theme.css`; the CSP line in `core/v1/README.md`.
+- **Accent** (2026-11-04): the tile's hue, set by the super user in the admin page, arrives with `core_me` (`Core.tile.accent`) and the core puts `data-accent` on `<html>` before the page shows. `--accent`, `--accent-2`, `--accent-strong`, `--accent-soft`, `--on-accent`, `--accent-grad`, `--accent-glow`, `--accent-ring` follow it in day and night; so do `.btn.primary`, `.tabs`, `.chip`, `.badge.accent`, `.notice.accent`, `.icon`, `.progress`, `.cover` and input focus. For a different hue on one element (a section, a cover), put `data-accent="<name>"` on that element (`Core.ACCENTS` lists the names; `Core.setAccent(name, node)`). Nothing else: the tile never defines a colour.
 
 **In the database** (call these, never copy them):
 - `core.require_user()` -> the caller's profile, or raises `SIGNED_OUT` / `NOT_APPROVED`
@@ -86,7 +88,7 @@ A tile declares its rights in `docs/TILE.md` (e.g. `edit`, `reply`, `export`) wi
 - Edit the admin repo, `core/v1`, the `core` schema, or another tile's schema, functions, bucket or repo; read another tile's tables.
 - Keep its own users, passwords or sessions.
 - Write the GitHub account name or a full site URL in code or data.
-- Use a CDN, external font, framework, tracker or iframe (only exception: the YouTube player for tiles the owner allowed, on the conditions in `docs/SECURITY.md` section 4); use `innerHTML` with data; inline scripts; hard-coded colours.
+- Use a CDN, external font, framework, tracker or iframe (only exception: the YouTube player for tiles the owner allowed, on the conditions in `docs/SECURITY.md` section 4); use `innerHTML` with data; inline scripts; hard-coded colours (a hue is chosen only through `data-accent` and the `--accent-*` tokens).
 - Trust the page for any permission.
 
 ## 7. Asking the core for something

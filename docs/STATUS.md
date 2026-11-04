@@ -40,6 +40,12 @@ Chats that start with **DAME-ADMIN** continue from here.
 - Decided without asking: sun/moon icon switch, avatar menu, hero band on the dashboard (greeting by time of day, date, tile count, Admin as a glass button), skeleton tiles while loading, brand block on the sign-in page, segmented tabs, rounder cards and sheets, pill toasts. Colours stay Daikin Middle East; system fonts only; no new outside source (CSP unchanged).
 - Checked: day and night, 1280 px and 390 px (no sideways scroll), menu, theme switch, admin page.
 
+## Tile accents (2026-11-04, owner: "theme must reflect in tiles and everything; each tile its own colour, close to the base; HVAC Notes keeps its colours")
+- `db/core/007_tile_accent.sql`: `core.tiles.accent` (palette check, default `blue`), `core_my_tiles` and `core_admin_tiles` return it, `core_me` puts it in `tile`, `core_admin_tile_save` takes `p_accent` (7 arguments; the 6-argument version is dropped). Tests cover an invalid accent and the value on every path.
+- `theme.css`: `--accent-*` tokens, palette blue / teal / green / orange / violet / rose / slate for day and night, `.progress`, `.cover`; buttons, tabs, chips, badges, icons and input focus now follow `--accent` (= brand unless a tile sets one). Topbar, mark, hero, avatar stay brand. `core.js` sets `data-accent` on `<html>` from `core_me`; `Core.ACCENTS`, `Core.accent`, `Core.setAccent`. Dashboard cards carry `data-accent`; Admin > Tiles has a Colour field with a live preview.
+- Checked: core tests, demo tests, `core.security_check()` empty, full Playwright run green; dashboard and demo tile at 1100 px, day and night, with four accents.
+- Decided without asking: the "on" switch in admin stays green (success), not accent; `.badge.brand` and `.notice.brand` keep working and now equal `.badge.accent` / `.notice.accent`.
+
 ## SQL applied
 | File | `dame-hub` project |
 |---|---|
@@ -49,10 +55,12 @@ Chats that start with **DAME-ADMIN** continue from here.
 | `db/core/004_email_signin.sql` | applied 2026-11-04 |
 | `db/core/005_owner_users.sql` | - |
 | `db/core/006_display_names.sql` | - |
+| `db/core/007_tile_accent.sql` | - |
 | `demo/db/demo/001_init.sql` | - |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
 ## Next
+0. Owner: apply `db/core/007_tile_accent.sql` (after 005 and 006), `select * from core.security_check();`, Security Advisor. Until it runs, the live admin tile form cannot save (it calls the 7-argument function) and the dashboard shows every tile in blue.
 1. Owner: apply `db/core/005_owner_users.sql`, security check, then Admin > Users > New user for the first colleague (sign-in by username only). Register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
 2. Done: Supabase refuses made-up email domains (`.local`, `example.com`, ...), so the username-only scheme (001-003) was dropped. Since 004 an account is the user's own email + password, with a chosen username as the visible handle. No account existed before 004, so nothing migrates.
 3. Owner: check the live site on a laptop and a phone; report anything odd.
@@ -61,6 +69,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 6. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
+- 2026-11-04 - **Tile accents** (`db/core/007_tile_accent.sql`, `core/v1` theme.css + core.js; no breaking change). Each tile has one hue from the core palette, set in Admin > Tiles > Colour; the core puts `data-accent` on `<html>` and primary buttons, tabs, chips, badges, icons, input focus and the new `.progress` / `.cover` follow it. Tiles change nothing to get it. A tile that colours sections of its own (covers, headings) replaces its colour values with `data-accent="<name>"` + `var(--accent-*)` on its next delivery; `docs/TILE-CONTRACT.md` section 2 lists the tokens and names. **`hvac-notes` keeps its current colours** (blue accent; its covers map to blue / green / orange / violet).
 - 2026-11-04 - **`core.display_names(p_tile, p_ids uuid[])`** (`db/core/006_display_names.sql`, requested by `hvac-notes`): current `username` and `display_name` (plus `active`) of the authors of shared records. Call it only inside the tile's own functions; the caller must have the tile; pending accounts are never returned; max 500 ids. Listed in `docs/TILE-CONTRACT.md` section 2. Tiles that saved a name next to each record may keep it as a fallback.
 - 2026-11-04 - **Embedded YouTube player allowed for `hvac-notes` only.** It adds `frame-src https://www.youtube-nocookie.com` to its CSP on pages that show videos (exact line in `core/v1/README.md`), on the conditions in `docs/SECURITY.md` section 4: click to load, iframe `src` built from a checked video id, `sandbox`, `referrerpolicy`, and a "Watch on YouTube" link. `docs/TILE-CONTRACT.md` section 6 names the exception. Other tiles: unchanged, no iframes; ask the owner through `docs/CORE-REQUESTS.md` if one needs it. `docs/TILES.md` has a new column, Exceptions.
 - 2026-11-04 - **Look refresh (core/v1, no breaking change).** Day/night is now a round sun/moon icon button with a circular reveal; account menu is an avatar + name pill (also on phones, where it used to be hidden); soft brand glow behind every page (`body` is transparent, `html` carries `--bg`); primary buttons use the brand gradient; `.tabs` is a segmented control; tiles have gradient icons, a hover arrow and a staggered entrance. New tokens and classes in `core/v1/README.md` (Theme). Tiles change nothing; a tile that set its own `body` background should drop it so the glow shows. Icon classes now also work without `.icon` (`.i-<name>`).

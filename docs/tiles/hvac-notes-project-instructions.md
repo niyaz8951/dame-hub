@@ -28,6 +28,7 @@ Then read this tile's `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md`,
 - SQL files go to the owner, who reads and applies them. Never ask for or accept the Supabase secret key or database password.
 
 ## Tile decisions
+- 2026-11-04 (owner): **colours stay as they are.** HVAC Notes keeps its current look (blue tile accent; notebook covers Chillers blue / AHU green / FCU orange / Theory violet). Core change `007_tile_accent`: covers and any coloured element use `data-accent="<name>"` and the `--accent-*` tokens instead of own colour values; no visible change. Other tiles will try other accents later.
 - 2026-11-04 (owner): HVAC Notes moves into DAME as this tile. Its existing pages are carried over.
 - **New clean repo.** `hvac-notes` starts with no history. Carry over only the reader code from `HVAC` (`index.html`, `assets/`, the vendored `marked`, KaTeX and Source Serif 4 with their licences), then bring it to the contract:
   - guard `Core.requireLogin({ tile: 'hvac-notes' })` first, and the CSP line and robots meta from `core/v1/README.md`

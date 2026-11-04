@@ -96,13 +96,16 @@ begin
   raise notice 'approval ok';
 
   -- ---- tiles
-  select public.core_admin_tile_save('t-tile', 'Test tile', 'A neutral line', 'tile', 10, array['edit', 'Edit ', 'export']) into v;
+  select public.core_admin_tile_save('t-tile', 'Test tile', 'A neutral line', 'tile', 'green', 10, array['edit', 'Edit ', 'export']) into v;
   if not (v ->> 'created')::boolean then raise exception 'tile create'; end if;
-  perform pg_temp.expect_error($q$select public.core_admin_tile_save('Bad Id', 'x', '', 'tile', 1, '{}')$q$, 'INVALID:id');
-  perform pg_temp.expect_error($q$select public.core_admin_tile_save('dame-hub', 'x', '', 'tile', 1, '{}')$q$, 'INVALID:id');
-  perform pg_temp.expect_error($q$select public.core_admin_tile_save('t-tile', 'x', '', 'tile', 1, array['no spaces'])$q$, 'INVALID:rights');
+  perform pg_temp.expect_error($q$select public.core_admin_tile_save('Bad Id', 'x', '', 'tile', 'blue', 1, '{}')$q$, 'INVALID:id');
+  perform pg_temp.expect_error($q$select public.core_admin_tile_save('dame-hub', 'x', '', 'tile', 'blue', 1, '{}')$q$, 'INVALID:id');
+  perform pg_temp.expect_error($q$select public.core_admin_tile_save('t-tile', 'x', '', 'tile', 'blue', 1, array['no spaces'])$q$, 'INVALID:rights');
   select rights into v from (select to_jsonb(rights) rights from public.core_admin_tiles() where id = 't-tile') s;
   if v <> '["edit","export"]'::jsonb then raise exception 'rights normalised: %', v; end if;
+  perform pg_temp.expect_error($q$select public.core_admin_tile_save('t-tile', 'x', '', 'tile', 'pink', 1, '{}')$q$, 'INVALID:accent');
+  if (select accent from public.core_admin_tiles() where id = 't-tile') <> 'green' then raise exception 'accent saved'; end if;
+  if (select accent from public.core_my_tiles() where id = 't-tile') <> 'green' then raise exception 'accent on dashboard'; end if;
   -- access while the tile is OFF: nobody but super sees it
   perform public.core_tile_access_set('t-tile', (select id from t_ids where k = 't.admin'), true, '{}', true);
   perform public.core_tile_access_set('t-tile', (select id from t_ids where k = 't.user'), true, array['edit'], null);
@@ -116,6 +119,7 @@ begin
   perform public.core_admin_tile_enable('t-tile', true);
   perform pg_temp.expect_error('select public.core_admin_tile_enable(''ghost'', true)', 'NOT_FOUND');
   select count(*) into n from public.core_my_tiles(); if n < 1 then raise exception 'super sees tiles'; end if;
+  if (public.core_me('t-tile') -> 'tile' ->> 'accent') <> 'green' then raise exception 'accent in core_me'; end if;
   select count(*) into n from public.core_admin_audit(50, null, 't-tile', null); if n < 3 then raise exception 'audit rows'; end if;
   reset role;
   raise notice 'tiles ok';
@@ -224,7 +228,7 @@ begin
 
   -- ---- removing a right from the tile removes it from users
   perform pg_temp.act_as('t.super'); perform public.core_session_start();
-  perform public.core_admin_tile_save('t-tile', 'Test tile', '', 'tile', 10, array['export']);
+  perform public.core_admin_tile_save('t-tile', 'Test tile', '', 'tile', 'green', 10, array['export']);
   reset role;
   if core.has_tile((select id from t_ids where k = 't.user'), 't-tile', 'edit') then raise exception 'stale right'; end if;
   raise notice 'rights sync ok';

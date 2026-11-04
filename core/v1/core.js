@@ -6,7 +6,8 @@ window.Core = (function () {
   var Api = window.Api;
   var CORE = cfg.CORE;
   var ICONS = ['tile', 'notes', 'chart', 'tools', 'users', 'folder', 'book', 'calc', 'gear', 'shield', 'wind', 'check'];
-  var Core = { user: null, tile: null, CORE: CORE, ICONS: ICONS, SITE_NAME: cfg.SITE_NAME };
+  var ACCENTS = ['blue', 'teal', 'green', 'orange', 'violet', 'rose', 'slate'];
+  var Core = { user: null, tile: null, CORE: CORE, ICONS: ICONS, ACCENTS: ACCENTS, SITE_NAME: cfg.SITE_NAME };
 
   // ---------- DOM ----------
   function el(tag, attrs) {
@@ -89,6 +90,14 @@ window.Core = (function () {
   }
   Core.themeToggle = themeToggle;
   Core.isNight = themeIsNight;
+  // Tile accent: the hue chosen for the tile in the admin page. Set on <html> for the whole page, or on one node (a section).
+  Core.accent = function (name) { return ACCENTS.indexOf(name) >= 0 ? name : 'blue'; };
+  Core.setAccent = function (name, node) {
+    node = node || document.documentElement;
+    name = Core.accent(name);
+    if (name === 'blue' && node === document.documentElement) node.removeAttribute('data-accent');
+    else node.setAttribute('data-accent', name);
+  };
 
   // ---------- helpers ----------
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -253,7 +262,7 @@ window.Core = (function () {
     return Api.rpc('core_me', { p_tile: opts.tile || null }).then(function (me) {
       Core.user = me;
       if (me.status === 'disabled') { toLogin(); return new Promise(function () {}); }
-      if (me.tile) Core.tile = me.tile;
+      if (me.tile) { Core.tile = me.tile; Core.setAccent(me.tile.accent); }
       buildTopbar(me);
       if (me.status === 'pending') {
         showState('Waiting for approval', 'Your request was received. The site admin will approve it; until then there is nothing to see here.',

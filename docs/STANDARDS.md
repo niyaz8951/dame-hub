@@ -54,6 +54,9 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 
 ## 6. Theme
 - Tokens only in `/dame-hub/core/v1/theme.css`: brand blue, surfaces, text, lines, success / warning / danger, radius, spacing; day and night (follows the device, user can switch). Never a hard-coded colour in a tile.
+- **One theme, tile accents** (owner, 2026-11-04). Everything a user sees inside DAME - core pages, tile pages, notes, lists, sheets, downloads - uses the core tokens and components: surfaces, text, lines, radius, spacing, topbar, cards, buttons, tabs, chips, badges, progress bars, day and night. A tile writes no colour, font, radius or shadow of its own.
+- Each tile has **one accent** from the core palette (`blue` = DAME brand, `teal`, `green`, `orange`, `violet`, `rose`, `slate`), chosen by the super user in Admin > Tiles > Colour. The core sets `data-accent` on `<html>` for the tile's pages and on its dashboard card; buttons, tabs, chips, icons and progress bars follow it through the `--accent-*` tokens (`core/v1/README.md`, Theme). The topbar, mark, hero and avatar stay brand blue everywhere, so every tile is visibly DAME.
+- Inside a tile, a section may use another hue from the same palette (e.g. notebook covers) only by putting `data-accent="<name>"` on that element and using `var(--accent-*)`; never a hex or named colour.
 - System font. Calm, clear, plenty of space; pleasant to use on a laptop and a phone.
 - Site name `DAME HUB` and the mark (the layers glyph on Daikin blue, `core/v1/icons/mark.svg`, `favicon.svg`) come from `core/v1/config.js` (`SITE_NAME`) and `core/v1/icons/`. Colours are the Daikin Middle East palette (`--brand #0097E0`); no other logo.
 
