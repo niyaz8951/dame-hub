@@ -33,6 +33,8 @@ The tile id must not be the name of any other repo in the account.
 - `core.require_tile('<tile-id>', <right or null>)` -> the caller's profile, or raises `SIGNED_OUT` / `NOT_APPROVED` / `NO_ACCESS` / `NO_RIGHT`
 - `core.has_tile(user_id, '<tile-id>', <right or null>)` -> boolean, for Storage policies
 - `core.is_tile_admin(user_id, '<tile-id>')`
+- `core.username_of(user_id)` -> username of an active user, for Storage paths `<username>/...`
+- `core.display_names('<tile-id>', ids uuid[])` -> `(id, username, display_name, active)` for the authors of shared records; pending accounts and unknown ids are left out, disabled users come back with `active = false`. Raises like `core.require_tile`. Callable only inside the tile's own functions, never from the page; return only the names the page needs.
 - `core.audit('<tile-id>', action, detail jsonb)`
 - `core.applied('<repo>', 'NNN_name')` - last line of every SQL file
 

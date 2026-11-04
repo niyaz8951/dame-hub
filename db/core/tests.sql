@@ -152,6 +152,8 @@ begin
   perform pg_temp.expect_error('select public.core_tile_users(''t-tile'')', 'NO_RIGHT');
   perform pg_temp.expect_error(format('select public.core_tile_access_set(''t-tile'', %L, true)', (select id from t_ids where k = 't.none')), 'NO_RIGHT');
   reset role;
+  -- as a tile function would call it (owner role, caller's session): no tile -> refused
+  perform pg_temp.expect_error('select core.display_names(''t-tile'', ''{}''::uuid[])', 'NO_ACCESS');
   raise notice 'no tile refused ok';
 
   -- ---- user with the tile and the right 'edit'
@@ -162,7 +164,17 @@ begin
   select count(*) into n from public.core_my_tiles(); if n <> 1 then raise exception 'user tiles'; end if;
   perform pg_temp.expect_error('select public.core_tile_users(''t-tile'')', 'NO_RIGHT');
   perform pg_temp.expect_error('select public.core_admin_users()', 'NO_RIGHT');
+  perform pg_temp.expect_error('select core.display_names(''t-tile'', ''{}''::uuid[])', 'PERMISSION'); -- not from the API role
   reset role;
+  -- display_names, as a tile function calls it: active and disabled named, pending and unknown ids left out
+  select count(*) into n from core.display_names('t-tile', array[
+    (select id from t_ids where k = 't.admin'), (select id from t_ids where k = 't.disabled'),
+    (select id from t_ids where k = 't.pending'), gen_random_uuid()]);
+  if n <> 2 then raise exception 'display_names rows: %', n; end if;
+  if (select active from core.display_names('t-tile', array[(select id from t_ids where k = 't.disabled')])) then raise exception 'display_names disabled active'; end if;
+  if (select display_name from core.display_names('t-tile', array[(select id from t_ids where k = 't.admin')])) <> 'Test Tile Admin' then raise exception 'display_names name'; end if;
+  perform pg_temp.expect_error('select core.display_names(''ghost'', ''{}''::uuid[])', 'NO_ACCESS');
+  perform pg_temp.expect_error(format('select core.display_names(''t-tile'', %L::uuid[])', (select array_agg(gen_random_uuid()) from generate_series(1, 501))), 'INVALID:ids');
   if not core.has_tile((select id from t_ids where k = 't.user'), 't-tile') then raise exception 'has_tile'; end if;
   if not core.has_tile((select id from t_ids where k = 't.user'), 't-tile', 'edit') then raise exception 'has_tile edit'; end if;
   if core.has_tile((select id from t_ids where k = 't.user'), 't-tile', 'export') then raise exception 'has_tile export'; end if;

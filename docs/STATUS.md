@@ -30,6 +30,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 - The owner's existing repos may join as tiles when he decides (the original idea: several repos, linked as tiles on the main site). The "nothing is imported" rule now applies to users and accounts only. Pattern in `docs/NEW-TILE.md`, "Bringing an existing site in".
 - First case: `HVAC` (HVAC Notes reader) -> tile **`hvac-notes`**, a new clean public repo. Its content (pages, images, index) moves to schema `hvac_notes` and private bucket `hvac-notes`. Per-user highlights, notes and reading positions move to the database. The shared-password encryption goes.
 - No source repo for this tile (owner, 2026-11-04): `HVAC` is **deleted** after cut-over, once the tile is checked and two offline backups are kept. Supabase is the only home of the content. The Publish page (right `edit`) uploads zips of pages and exports all pages as a zip (authoring copy and backup). Claude sends new or changed pages as a zip in the chat.
+- **Shared highlights and notes** (owner): visible to everyone with the tile; author edits and deletes his own, tile admin and super user may delete any; reading positions stay private.
 - **Online only**: no offline copy of the content on devices (no service worker cache of tile data).
 - Videos open on YouTube (no iframe); content widgets become tile code.
 - The Claude project "HVAC Engineering" becomes "DAME - HVAC Notes" (instructions from the `docs/NEW-TILE.md` template, filled by the admin project).
@@ -47,6 +48,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 | `db/core/003_email_domain.sql` | applied 2026-11-04 (superseded) |
 | `db/core/004_email_signin.sql` | applied 2026-11-04 |
 | `db/core/005_owner_users.sql` | - |
+| `db/core/006_display_names.sql` | - |
 | `demo/db/demo/001_init.sql` | - |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
@@ -59,6 +61,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 6. **Tile `hvac-notes`:** repo created and tile registered (on) 2026-11-04. Owner converts the "HVAC Engineering" Claude project with the instructions delivered 2026-11-04, then the tile project builds it. Cut-over to follow "Bringing an existing site in", step 5.
 
 ## Changes tiles must know
+- 2026-11-04 - **`core.display_names(p_tile, p_ids uuid[])`** (`db/core/006_display_names.sql`, requested by `hvac-notes`): current `username` and `display_name` (plus `active`) of the authors of shared records. Call it only inside the tile's own functions; the caller must have the tile; pending accounts are never returned; max 500 ids. Listed in `docs/TILE-CONTRACT.md` section 2. Tiles that saved a name next to each record may keep it as a fallback.
 - 2026-11-04 - **Embedded YouTube player allowed for `hvac-notes` only.** It adds `frame-src https://www.youtube-nocookie.com` to its CSP on pages that show videos (exact line in `core/v1/README.md`), on the conditions in `docs/SECURITY.md` section 4: click to load, iframe `src` built from a checked video id, `sandbox`, `referrerpolicy`, and a "Watch on YouTube" link. `docs/TILE-CONTRACT.md` section 6 names the exception. Other tiles: unchanged, no iframes; ask the owner through `docs/CORE-REQUESTS.md` if one needs it. `docs/TILES.md` has a new column, Exceptions.
 - 2026-11-04 - **Look refresh (core/v1, no breaking change).** Day/night is now a round sun/moon icon button with a circular reveal; account menu is an avatar + name pill (also on phones, where it used to be hidden); soft brand glow behind every page (`body` is transparent, `html` carries `--bg`); primary buttons use the brand gradient; `.tabs` is a segmented control; tiles have gradient icons, a hover arrow and a staggered entrance. New tokens and classes in `core/v1/README.md` (Theme). Tiles change nothing; a tile that set its own `body` background should drop it so the glow shows. Icon classes now also work without `.icon` (`.i-<name>`).
 - 2026-11-04 - Rule book: an existing site may join as a tile (`docs/NEW-TILE.md`, "Bringing an existing site in"); `docs/SECURITY.md` section 1 allows a private **source repo** for a tile's authoring copy and says shared-password encryption in a public repo is not allowed. `docs/STANDARDS.md` section 1 and the project template wording changed to match.
