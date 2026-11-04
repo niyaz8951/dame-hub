@@ -7,12 +7,12 @@ create temp table t_ids (k text primary key, id uuid);
 -- Users are created through the same trigger as a real sign-up.
 insert into auth.users (id, email, raw_user_meta_data, created_at, updated_at)
 values
-  (gen_random_uuid(), 't.super@users.thinkneering.com',   '{"username":"t.super","display_name":"Test Super"}', now(), now()),
-  (gen_random_uuid(), 't.admin@users.thinkneering.com',   '{"username":"t.admin","display_name":"Test Tile Admin"}', now(), now()),
-  (gen_random_uuid(), 't.user@users.thinkneering.com',    '{"username":"t.user","display_name":"Test User"}', now(), now()),
-  (gen_random_uuid(), 't.pending@users.thinkneering.com', '{"username":"t.pending"}', now(), now()),
-  (gen_random_uuid(), 't.disabled@users.thinkneering.com','{"username":"t.disabled"}', now(), now()),
-  (gen_random_uuid(), 't.none@users.thinkneering.com',    '{"username":"t.none"}', now(), now());
+  (gen_random_uuid(), 't.super@example.com',   '{"username":"t.super","display_name":"Test Super"}', now(), now()),
+  (gen_random_uuid(), 't.admin@example.com',   '{"username":"t.admin","display_name":"Test Tile Admin"}', now(), now()),
+  (gen_random_uuid(), 't.user@example.com',    '{"username":"t.user","display_name":"Test User"}', now(), now()),
+  (gen_random_uuid(), 't.pending@example.com', '{"username":"t.pending"}', now(), now()),
+  (gen_random_uuid(), 't.disabled@example.com','{"username":"t.disabled"}', now(), now()),
+  (gen_random_uuid(), 't.none@example.com',    '{"username":"t.none"}', now(), now());
 insert into t_ids select username, id from core.profiles where username like 't.%';
 
 -- helper: act as a user with a fresh session bound through core_session_start()
@@ -44,9 +44,9 @@ do $$
 declare v jsonb; n int;
 begin
   -- ---- sign-up trigger
-  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('bad@users.thinkneering.com', '{"username":"Bad Name!"}')$q$, 'INVALID:username');
-  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('someone@example.com', '{"username":"someone"}')$q$, 'INVALID:username');
-  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('t.user@users.thinkneering.com', '{"username":"t.user"}')$q$, 'duplicate key value violates unique constraint "users_email_key"');
+  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('bad@example.com', '{"username":"Bad Name!"}')$q$, 'INVALID:username');
+  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('someone@gmail.com', '{"username":"someone"}')$q$, 'INVALID:username');
+  perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('t.user@example.com', '{"username":"t.user"}')$q$, 'duplicate key value violates unique constraint "users_email_key"');
   select count(*) into n from core.profiles where username like 't.%' and status = 'pending'; if n <> 6 then raise exception 'profiles not pending'; end if;
   raise notice 'sign-up trigger ok';
 

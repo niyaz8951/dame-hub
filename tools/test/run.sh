@@ -11,6 +11,7 @@ psql $ADMIN -qc "drop database if exists $DB" ; psql $ADMIN -qc "create database
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f tools/test/supabase-stub.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/001_init.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/002_email_domain.sql
+psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/003_email_domain.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/tests.sql 2>&1 | grep -E 'ERROR|PASSED'
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/seed-staging.sql > /dev/null
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f demo/db/demo/001_init.sql > /dev/null

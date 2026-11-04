@@ -4,7 +4,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 
 ## Environment
 - GitHub `niyaz8951/dame-hub` (Pages, `main`, root). Tiles: sibling repos, `docs/TILES.md`.
-- Supabase: **one project, `dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`), used for testing and live until the team starts using the site. `core/v1/config.js` already has a `STAGING` slot (today = LIVE); `docs/RUNBOOK.md` "Add a staging project" says what changes when it exists. Until then "staging" in the rule book means this project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@users.thinkneering.com'`).
+- Supabase: **one project, `dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`), used for testing and live until the team starts using the site. `core/v1/config.js` already has a `STAGING` slot (today = LIVE); `docs/RUNBOOK.md` "Add a staging project" says what changes when it exists. Until then "staging" in the rule book means this project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@example.com'`).
 
 ## Built (step 1, 2026-11-04)
 - `docs/`: SECURITY, STANDARDS, TILE-CONTRACT, NEW-TILE, MOVE-ACCOUNT (the rule book), STATUS, TILES, RUNBOOK.
@@ -28,13 +28,14 @@ Chats that start with **DAME-ADMIN** continue from here.
 | File | `dame-hub` project |
 |---|---|
 | `db/core/001_init.sql` | applied 2026-11-04 |
-| `db/core/002_email_domain.sql` | - |
+| `db/core/002_email_domain.sql` | applied 2026-11-04 (superseded by 003) |
+| `db/core/003_email_domain.sql` | - |
 | `demo/db/demo/001_init.sql` | - |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
 ## Next
-1. Owner: apply `db/core/002_email_domain.sql`, security check, request access as `niyaz`, `core.make_super('niyaz')`, register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
-2. Owner: Supabase Auth settings from `01-SETUP.md` step 2.4 (confirm email off, password rules, Site URL, `public` only exposed). If Supabase refuses `@users.thinkneering.com` at sign-up, say so: `config.js` `EMAIL_DOMAIN` and the trigger's domain check change together (new SQL file).
+1. Owner: apply `db/core/003_email_domain.sql`, security check, request access as `niyaz`, `core.make_super('niyaz')`, register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
+2. Owner: Supabase Auth settings from `01-SETUP.md` step 2.4 (confirm email off, password rules, Site URL, `public` only exposed). If Supabase refuses `@example.com` at sign-up, say so: `config.js` `EMAIL_DOMAIN` and the trigger's domain check change together (new SQL file).
 3. Owner: check the live site on a laptop and a phone; report anything odd.
 4. Step 2 candidates (on request): Playwright run against the real project with the demo accounts; password-verification hook for failed sign-ins; staging project.
 

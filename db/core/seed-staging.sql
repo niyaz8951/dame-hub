@@ -14,18 +14,18 @@ do $$
 declare v_name text; v_id uuid;
 begin
   foreach v_name in array array['demo_admin', 'demo_user', 'demo_none', 'demo_pending'] loop
-    if exists (select 1 from auth.users where email = v_name || '@users.thinkneering.com') then continue; end if;
+    if exists (select 1 from auth.users where email = v_name || '@example.com') then continue; end if;
     v_id := gen_random_uuid();
     insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
       raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
       confirmation_token, recovery_token, email_change_token_new, email_change, email_change_token_current,
       phone_change, phone_change_token, reauthentication_token)
     values ('00000000-0000-0000-0000-000000000000', v_id, 'authenticated', 'authenticated',
-      v_name || '@users.thinkneering.com', extensions.crypt('DemoPass2026', extensions.gen_salt('bf')), now(),
+      v_name || '@example.com', extensions.crypt('DemoPass2026', extensions.gen_salt('bf')), now(),
       '{"provider":"email","providers":["email"]}', jsonb_build_object('username', v_name, 'display_name', replace(initcap(replace(v_name, '_', ' ')), ' ', ' ')),
       now(), now(), '', '', '', '', '', '', '', '');
     insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
-    values (gen_random_uuid(), v_id, jsonb_build_object('sub', v_id::text, 'email', v_name || '@users.thinkneering.com', 'email_verified', true),
+    values (gen_random_uuid(), v_id, jsonb_build_object('sub', v_id::text, 'email', v_name || '@example.com', 'email_verified', true),
       'email', v_id::text, now(), now(), now());
   end loop;
 
