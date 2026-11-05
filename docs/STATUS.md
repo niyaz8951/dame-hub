@@ -27,9 +27,9 @@ Admin > Health > SQL files shows this live from the database and each repo's `db
 | `db/core/006_display_names.sql` | applied (owner, 2026-11-05) |
 | `db/core/007_tile_accent.sql` | applied (owner, 2026-11-05) |
 | `db/core/008_manage_users.sql` | applied (owner, 2026-11-05) |
-| `db/core/009_tile_users.sql` | **to apply** |
-| `db/core/010_health.sql` | **to apply** |
-| `demo/db/demo/001_init.sql` | see Admin > Health |
+| `db/core/009_tile_users.sql` | applied 2026-11-05 |
+| `db/core/010_health.sql` | applied 2026-11-05 |
+| `demo/db/demo/001_init.sql` | - (demo not registered on live) |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
 **Fresh project (staging), in this order:** `001_init`, `004_email_signin`, `005_owner_users`, `006_display_names`, `007_tile_accent`, `008_manage_users`, `009_tile_users`, `010_health`, `demo/db/demo/001_init.sql`, every tile's files in the order of its `db/migrations.json`, then `seed-staging.sql`. `002` and `003` are skipped on a fresh project (marked `superseded`): `004` replaces the same trigger and nothing depends on them.
@@ -38,7 +38,7 @@ Admin > Health > SQL files shows this live from the database and each repo's `db
 Review 2026-11-05 evening (owner: "review and suggest what is done, or some step missed, and way forward"). Contract scan of every tile (CSP line on every page, no outside code, no `innerHTML` with data, no account name, every `public` function `security definer` + `search_path = ''` with execute revoked from `public, anon`, nothing granted to `anon`, no table in `public`, no manifest or service worker): **clean** in `hvac-notes`, `projects`, `maps`, `tools`.
 
 1. **Owner, first: the HVAC Notes backup.** The old `HVAC` repo is no longer public. Its cut-over (`hvac-notes/docs/STATUS.md`, Phase 3) asked for two backups before deleting it. If `HVAC` is deleted and its zip was not kept, the tile's own export is now the only copy outside Supabase: HVAC Notes > Publish > *Download all pages*, kept off this computer. Then tell the admin project the date `HVAC` went (Phase 3 step 9) so the registry closes it.
-2. **Owner: SQL waiting on live, in this order** (read each first): core `009_tile_users`, `010_health`; `hvac-notes` `003_names`; `projects` `008_product_options`, `009_open_edit`, `010_matching_rules`; `maps` `003_flowcharts`, `004_review`, `005_process_flow`. Then Admin > Health > Run check now (Clean, nightly On), Security Advisor. From then on Admin > Health shows this list itself (Projects already publishes its list; HVAC Notes and Maps after their next delivery).
+2. **Done 2026-11-05 (Admin > Health, owner's screenshot):** core up to date (001-010), `projects` up to date (001-010), `maps` 5 files ran (001-005), `hvac-notes` 3 ran (001-003); `demo` is not registered on live (fine: tests only). **`hvac-notes` `003_names` broke shared highlights on live** (each user saw only his own): the owner restored the `002` body of `hvac_notes_shared()` by hand; the tile delivers `004` without the temp table (prompt given 2026-11-05).
 3. **Tiles, next delivery** (`docs/TILE-CHANGES.md`): `maps` and `hvac-notes` add `db/migrations.json` + `CLAUDE.md` (`projects` has both); `hvac-notes` `publish.html` and the four `tools/` tool pages take the `theme-color` head line; `projects` moves its `core.tile_users` request to Done.
 4. **Staging, before the team arrives.** Every tile file now goes straight to live, which holds real work (projects, the compliance library, maps). The second free Supabase slot as `dame-staging` (`docs/RUNBOOK.md`, "Add a staging project"): tiles test there, the owner applies to live after. The admin project wires `config.js` and the CSP lines on request.
 5. **Backups.** The free plan keeps no backup you can restore. Until Pro: a weekly `pg_dump` (`docs/RUNBOOK.md`, "Export") kept off the computer, or move `dame-hub` to Pro (daily backups) once the team relies on it.
