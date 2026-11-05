@@ -92,6 +92,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 - Rules and the refresh routine: `docs/LINES.md`. A Claude chat starting **DAME-LINES refresh** reads the file, drops expired lines, adds 20-30 checked ones, runs `node dev/lines-check.mjs`, pushes. No SQL, no security check.
 - Decided without asking: the list is a public file, not a Supabase table (it holds no internal data; editing is a push, which suits the refresh routine; an admin tab can come later if the team should add lines). No news in the first batch (news goes in at refreshes, each with an expiry).
 - Checked: `node dev/lines-check.mjs` OK; `dev/test/run.sh` green with new steps (a line shows, no tile count, a refresh shows another line), desktop and 390 px.
+- Layout (owner, same day: "looks out of place, broke; centre it, long line and a short continuing line below"): the line sits on its own row across the full banner under a thin divider, centred; a long line fills the first row and the rest wraps centred below. Test pins the longest line at 1280 and 390 px.
 
 ### Dashboard lines log
 - 2026-11-05: 76 lines (first batch).

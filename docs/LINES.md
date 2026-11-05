@@ -38,6 +38,9 @@ One short line in the dashboard hero, in place of the old tile count. A new one 
 5. Run `node dev/lines-check.mjs` until it says OK. Look at a few on a phone width if any is near 200 characters.
 6. Push to `main` with the message `Lines: +<n>, -<m> expired`. Add one line to `docs/STATUS.md` under "Dashboard lines" (date, count). No SQL, no security check; the site updates about a minute after the push (the browser may keep the old list up to 10 minutes).
 
+## How the page shows it
+- Its own row across the full width of the banner, under a thin divider, centred. A long line fills the first row and wraps centred below.
+
 ## How the page picks
 - Loads the list after sign-in, keeps lines with a known kind, text up to 240 characters, `added` on or before today and `expires` on or after today (device's local date).
 - Remembers the ids of the last shown lines in `localStorage` (`dame.lines.recent`, cleared on sign-out with the other `dame.` keys): half the list, at most 40. Picks at random from the rest.

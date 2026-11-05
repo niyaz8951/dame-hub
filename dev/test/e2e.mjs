@@ -1,4 +1,5 @@
 // End-to-end run of the DAME pages against the mock (test harness only).
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 const require = createRequire(process.env.PLAYWRIGHT_ROOT || import.meta.url);
@@ -61,6 +62,18 @@ try {
   await expect((await page.getAttribute('#line', 'data-id')) !== line1, 'a refresh shows another line');
   await page.waitForTimeout(800);
   await shot(page, 'dashboard');
+  // the longest line, centred on its own row under the greeting
+  const longest = JSON.parse(readFileSync(new URL('../../lines.json', import.meta.url))).lines.sort((a, b) => b.text.length - a.text.length)[0];
+  await page.route('**/dame-hub/lines.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ lines: [longest] }) }));
+  for (const w of [1280, 390]) {
+    await page.setViewportSize({ width: w, height: 800 });
+    await page.reload(); await page.waitForSelector('#line:not([hidden])'); await page.waitForTimeout(800);
+    const box = await page.evaluate(() => { const l = document.querySelector('#line').getBoundingClientRect(), h = document.querySelector('.hero h1').getBoundingClientRect(), hero = document.querySelector('.hero').getBoundingClientRect();
+      return { below: l.top >= h.bottom, centred: getComputedStyle(document.querySelector('#line')).textAlign === 'center', full: l.width > hero.width * 0.8, scroll: document.documentElement.scrollWidth }; });
+    await expect(box.below && box.centred && box.full && box.scroll <= w, 'longest line centred on its own row at ' + w + 'px (' + longest.id + ')');
+    await page.locator('.hero').screenshot({ path: 'dev/test/out/hero-line-' + w + '.png' });
+  }
+  await page.unroute('**/dame-hub/lines.json'); await page.setViewportSize({ width: 1100, height: 800 });
 
   log('admin requests');
   await page.goto(B + '/dame-hub/admin.html');
