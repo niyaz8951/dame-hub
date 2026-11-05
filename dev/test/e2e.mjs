@@ -53,6 +53,13 @@ try {
   await page.waitForSelector('a.tile');
   await expect((await page.$$('a.tile')).length === 1, 'super sees the demo tile (' + (await page.$$('a.tile')).length + ')');
   await expect(await page.isVisible('a.btn[href$="admin.html"]'), 'admin button for super');
+  await page.waitForSelector('#line:not([hidden])');
+  const line1 = await page.getAttribute('#line', 'data-id');
+  await expect(!!line1 && (await page.textContent('#line-text')).length > 10, 'dashboard shows a line (' + line1 + ')');
+  await expect(!(await page.textContent('.hero')).includes('ready for you'), 'no tile count in the hero');
+  await page.reload(); await page.waitForSelector('#line:not([hidden])');
+  await expect((await page.getAttribute('#line', 'data-id')) !== line1, 'a refresh shows another line');
+  await page.waitForTimeout(800);
   await shot(page, 'dashboard');
 
   log('admin requests');
@@ -164,6 +171,8 @@ try {
   await page.waitForSelector('a.tile');
   await expect((await page.$$('a.tile')).length === 1, 'demo_user sees 1 tile');
   await expect(!(await page.isVisible('a.btn[href$="admin.html"]')), 'no admin button');
+  await page.waitForSelector('#line:not([hidden])'); await page.waitForTimeout(800);
+  await shot(page, 'dashboard-phone');
   const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
   await expect(scrollW <= 390, 'no sideways scroll on dashboard at 390px (' + scrollW + ')');
   await page.goto(B + '/dame-hub/admin.html');

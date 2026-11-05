@@ -342,6 +342,9 @@ td.actions { white-space: nowrap; text-align: right; }
 .hero h1 { color: var(--on-hero); margin: 0 0 6px; font-size: 2.1rem; }
 .hero .kicker { margin: 0 0 8px; color: var(--on-hero-2); font-size: 0.82rem; font-weight: 650; letter-spacing: 0.09em; text-transform: uppercase; }
 .hero .sub { margin: 0; color: var(--on-hero-2); }
+.hero .hero-line { max-width: 64ch; margin-top: 4px; line-height: 1.5; animation: rise .5s var(--ease) .15s both; }
+.hero .hero-line .kind { display: inline-block; margin: 0 8px 0 0; padding: 2px 9px; border-radius: 999px; background: var(--hero-glass); border: 1px solid var(--hero-glass-line); color: var(--on-hero); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 1px; }
+.hero .hero-line .by { display: inline-block; margin-left: 6px; font-style: italic; opacity: .85; }
 .hero .row { position: relative; }
 .section-title { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-2); margin: 0 0 var(--space-4); }
 .section-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
