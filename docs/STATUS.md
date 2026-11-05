@@ -4,7 +4,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 
 ## Environment
 - GitHub `niyaz8951/dame-hub` (Pages, `main`, root). Tiles: sibling repos, `docs/TILES.md`.
-- Supabase: live project **`dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`). A staging project `dame-staging` was created by the owner on 2026-11-04 (second Free slot); `core/v1/config.js` `STAGING` still equals `LIVE` until its URL and publishable key arrive (see Next, item 0). Until then "staging" in the rule book means the live project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@example.com'`).
+- Supabase: live project **`dame-hub`** (`https://cykpvtekrdfmqimtrcps.supabase.co`). No staging project for now (owner, 2026-11-05: `dame-staging` deleted, to be revisited); `core/v1/config.js` `STAGING` equals `LIVE`. Until one exists "staging" in the rule book means the live project, and `seed-staging.sql` demo accounts are removed before the team arrives (disable them in Admin > Users, or `delete from auth.users where email like 'demo\_%@example.com'`).
 
 ## Built (step 1, 2026-11-04)
 - `docs/`: SECURITY, STANDARDS, TILE-CONTRACT, NEW-TILE, MOVE-ACCOUNT (the rule book), STATUS, TILES, RUNBOOK.
@@ -82,7 +82,7 @@ Chats that start with **DAME-ADMIN** continue from here.
 **Fresh project (staging), in this order:** `001_init`, `004_email_signin`, `005_owner_users`, `006_display_names`, `007_tile_accent`, `demo/db/demo/001_init.sql`, every tile's `db/<tile_id>/NNN_*.sql` (today `hvac-notes`), then `seed-staging.sql`. `002` and `003` are skipped on a fresh project: `004` replaces the same trigger and nothing depends on them.
 
 ## Next
-0. **Staging values:** the URL and key sent on 2026-11-04 for `dame-staging` were the live project's (`cykpvtekrdfmqimtrcps`); waiting for the staging project's own Project URL + publishable key (Supabase > `dame-staging` > Project Settings > API Keys). On arrival: `config.js` `STAGING`, staging URL in `img-src` and `connect-src` of the CSP line in `core/v1/README.md` and every page (core, `demo/`, `tools/`), entry under "Changes tiles must know" so `hvac-notes` updates its CSP line.
+0. Staging: none for now (owner, 2026-11-05). When one is created: `config.js` `STAGING`, staging URL in `img-src` and `connect-src` of the CSP line in `core/v1/README.md` and every page (core, `demo/`, `tools/`), entry under "Changes tiles must know" so `hvac-notes` updates its CSP line; SQL order for a fresh project under "SQL applied".
 0a. Owner: apply `db/core/007_tile_accent.sql` (after 005 and 006), `select * from core.security_check();`, Security Advisor. Until it runs, the live admin tile form cannot save (it calls the 7-argument function) and the dashboard shows every tile in blue.
 1. Owner: apply `db/core/005_owner_users.sql`, security check, then Admin > Users > New user for the first colleague (sign-in by username only). Register tile `demo` in the admin page, apply `demo/db/demo/001_init.sql`, switch it on (RUNBOOK "First run").
 2. Done: Supabase refuses made-up email domains (`.local`, `example.com`, ...), so the username-only scheme (001-003) was dropped. Since 004 an account is the user's own email + password, with a chosen username as the visible handle. No account existed before 004, so nothing migrates.
