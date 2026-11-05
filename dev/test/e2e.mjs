@@ -69,14 +69,21 @@ try {
   await expect((await page.$$('#users tbody tr')).length === 5, '5 users listed');
   await page.fill('#user-filter', 'demo_none');
   await expect((await page.$$('#users tbody tr')).length === 1, 'filter works');
-  await page.click('#users tbody tr button.danger');
-  await page.waitForSelector('.sheet');
-  await page.click('.sheet .actions button.danger');
-  await page.waitForFunction(() => document.querySelector('#users tbody tr .badge.danger'));
-  await expect(true, 'disable user via confirm');
-  await page.click('#users tbody tr button.btn.small:not(.danger)');
-  await page.waitForFunction(() => document.querySelector('#users tbody tr .badge.success'));
+  await page.click('#users tbody tr button.btn.small');
+  await page.waitForSelector('.sheet #mu-status');
+  await page.click('#mu-status');
+  await page.waitForFunction(() => document.querySelector('.sheet .card .badge.danger'));
+  await expect(true, 'disable user from Manage');
+  await page.click('#mu-status');
+  await page.waitForFunction(() => document.querySelector('.sheet .card .badge.success'));
+  await page.click('.sheet > .actions button');
+  await page.waitForFunction(() => !document.querySelector('.sheet') && document.querySelector('#users tbody tr .badge.success'));
   await expect(true, 'enable user again');
+  // the super user's own row: name only
+  await page.fill('#user-filter', 'niyaz');
+  await page.click('#users tbody tr button.btn.small'); await page.waitForSelector('.sheet #mu-user');
+  await expect(!(await page.$('#mu-setpass')) && !(await page.$('#mu-delete')), 'own row: no password or delete');
+  await page.click('.sheet > .actions button'); await page.waitForFunction(() => !document.querySelector('.sheet'));
   await page.fill('#user-filter', '');
   await page.click('#user-new'); await page.waitForSelector('.sheet');
   await page.fill('#nu-user', 'made.one'); await page.fill('#nu-name', 'Made One'); await page.fill('#nu-pass', 'TempPass2026');
@@ -222,6 +229,51 @@ try {
   await page.fill('#new1', 'MadePass2026'); await page.fill('#new2', 'MadePass2026'); await page.click('#pass-form button');
   await page.waitForURL('**/dashboard.html');
   await expect(true, 'owner-created user reaches the dashboard');
+
+  // 4c. admin manages an account: rename, set password (old session ends), delete
+  log('manage user');
+  const userPage = page;                          // made.one, signed in
+  const admin = await newPage({ width: 390, height: 844 });
+  await signIn(admin, 'niyaz@gmail.com', 'OwnerPass2026'); await admin.waitForURL('**/dashboard.html');
+  await admin.goto(B + '/dame-hub/admin.html#users'); await admin.waitForSelector('#users table');
+  await admin.fill('#user-filter', 'made.one');
+  await admin.click('#users tbody tr button.btn.small'); await admin.waitForSelector('.sheet #mu-user');
+  await admin.fill('#mu-user', 'demo_user'); await admin.click('#mu-save');
+  await admin.waitForSelector('.sheet .notice.danger:not([hidden])');
+  await expect((await admin.textContent('.sheet .notice.danger:not([hidden])')).includes('taken'), 'rename to a used name refused');
+  await admin.fill('#mu-user', 'made.two'); await admin.fill('#mu-name', 'Made Two'); await admin.click('#mu-save');
+  await admin.waitForSelector('.sheet .notice.success:not([hidden])');
+  await expect((await admin.textContent('.sheet .notice.success:not([hidden])')).includes('signs in as made.two'), 'renamed; sign-in name moved');
+  await admin.click('#mu-setpass'); await admin.waitForSelector('.sheet .notice.danger:not([hidden])');
+  await expect(true, 'empty password refused');
+  await admin.fill('#mu-pass', 'ResetPass2026'); await admin.click('#mu-setpass');
+  await admin.waitForFunction(() => [...document.querySelectorAll('.sheet .notice.success')].some((n) => !n.hidden && n.textContent.includes('signed out everywhere')));
+  await expect(true, 'password set from Manage');
+  await expect(await admin.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'manage sheet at 390 px: no sideways scroll');
+  await shot(admin, 'admin-manage-390');
+  await admin.click('.sheet > .actions button'); await admin.waitForFunction(() => !document.querySelector('.sheet'));
+  // the user's open session is gone; the old name no longer signs in; the new one does, with a forced change
+  await userPage.goto(B + '/dame-hub/dashboard.html'); await userPage.waitForURL('**/dame-hub/?next=**');
+  await expect(true, 'reset ends the user\'s session');
+  await userPage.fill('#si-email', 'made.one'); await userPage.fill('#si-pass', 'ResetPass2026'); await userPage.click('#signin button[type=submit]');
+  await userPage.waitForSelector('#si-error:not([hidden])');
+  await expect(true, 'old username no longer signs in');
+  await userPage.fill('#si-email', 'made.two'); await userPage.fill('#si-pass', 'ResetPass2026'); await userPage.click('#signin button[type=submit]');
+  await userPage.waitForURL('**/account.html?change=1**');
+  await expect(true, 'new username + reset password sign in, change forced');
+  // delete
+  await admin.fill('#user-filter', 'made.two');
+  await admin.click('#users tbody tr button.btn.small'); await admin.waitForSelector('.sheet #mu-delete');
+  await admin.click('#mu-delete');
+  await expect(await admin.isDisabled('#mu-delete-go'), 'delete waits for the typed username');
+  await admin.fill('#mu-confirm', 'made.two');
+  await admin.click('#mu-delete-go');
+  await admin.waitForFunction(() => !document.querySelector('.sheet') && !document.querySelector('#users').textContent.includes('made.two'));
+  await expect(psql("select count(*) from core.profiles where username = 'made.two'") === '0', 'account deleted');
+  await expect(psql("select count(*) from core.username_history where username in ('made.one', 'made.two')") === '2', 'both names retired');
+  await userPage.goto(B + '/dame-hub/dashboard.html'); await userPage.waitForURL('**/dame-hub/?next=**');
+  await expect(true, 'deleted user is out');
+  await admin.context().close();
 
   // 5. disabled user
   log('disabled user');

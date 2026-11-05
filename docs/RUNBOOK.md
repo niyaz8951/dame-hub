@@ -19,17 +19,26 @@ Staging only: `db/core/seed-staging.sql` creates the demo tile and four demo acc
 ## Create a user (no email needed)
 Admin page > Users > **New user**: username, display name, temporary password (10+ characters, mixed case, a digit). Tell the person the username and the temporary password by voice; he signs in with them and must choose his own password at once. Users who prefer their own email can still use **Request access** on the site and wait for your approval.
 
+## Manage a user: rename, password, disable, delete
+Admin page > Users > **Manage** on the user's row (needs `db/core/008_manage_users.sql`):
+- **Name**: change the username and the display name. An account you created signs in with the new username at once (tell him); an account on his own email keeps signing in with the email, only the handle changes. The old username stays with that account: nobody else can take it (a newcomer would otherwise inherit history lines and files written under it). To free one anyway: `select core.release_username('name');`
+- **Password**: type one or press **Generate**, then **Set password**. He is signed out everywhere at once. With "Ask for a new password at the next sign-in" ticked (the default) it is a reset: he must choose his own at sign-in. Unticked, it is a password he keeps. Tell it by voice or in person, never by chat.
+- **Disable / Enable**: as below.
+- **Delete account**: type the username, then **Delete for good**. The sign-in, the profile and all tile access go; what he wrote in tiles stays under the name saved at the time. Cannot be undone; if unsure, disable instead. If a tile ties records to the account the delete is refused with a message: disable the account.
+Your own row and other super users show the name section only: your password is changed on the Account page, a super user's in SQL (below).
+
 ## Approve, refuse, disable, enable a user
-Admin page > Requests (approve or refuse) and Users (disable or enable). A disabled user is refused on his next call and cannot sign in. In SQL if needed:
+Admin page > Requests (approve or refuse) and Users > Manage (disable or enable). A disabled user is refused on his next call and cannot sign in. In SQL if needed:
 ```sql
 update core.profiles set status = 'active' where username = 'name';
 ```
 
-## Reset a password the user forgot
+## Reset a password in SQL (a super user, or without the admin page)
+The admin page does this for everyone else (Users > Manage > Password).
 ```sql
 select core.reset_password('name', 'TempPass2026');
 ```
-Sets a temporary password (10+ characters, mixed case and a digit), ends his session and forces a new password at his next sign-in. Tell him the temporary password by voice or in person, never by chat.
+Sets a temporary password (10+ characters, mixed case and a digit), ends all his sessions and forces a new password at his next sign-in. Tell him the temporary password by voice or in person, never by chat.
 
 ## Name or remove a super user
 ```sql
@@ -45,7 +54,7 @@ Admin page > Tiles > the switch. Off: the tile disappears from every dashboard a
 - **Secret / service_role key** or the **database password**: rotate in the dashboard at once if it was ever shown anywhere. DAME never uses them, so nothing in the repos changes. Tell the admin project so `docs/STATUS.md` records the date.
 
 ## Departing team member
-Admin page > Users > Disable. GitHub: remove him as collaborator from his tile repo. If he was a tile admin, name another one (Tiles > Access).
+Admin page > Users > Manage > Disable (delete later, once nobody needs his account any more). GitHub: remove him as collaborator from his tile repo. If he was a tile admin, name another one (Tiles > Access).
 
 ## Sign-in troubles
 - "Wrong username or password" for a user who is sure: `select p.username, u.email, p.status, p.session_started_at from core.profiles p join auth.users u on u.id = p.id where p.username = 'name';` then reset the password.

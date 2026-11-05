@@ -21,7 +21,8 @@ GitHub Pages and the Supabase API are reachable from the internet; that is how t
 - Request access = sign-up. A new account is **pending**: it can sign in but every function and every file rule refuses it (`NOT_APPROVED`) until the super user approves it. Disabled accounts are refused on the next call, not at the next login.
 - One active session per user: at sign-in the core records the session id; `core.require_user()` refuses any other session of that user. Sessions older than 12 hours are refused; the user signs in again.
 - Error messages never say whether a username exists ("Wrong username or password").
-- Passwords: 10+ characters, mixed case and digits (set in Supabase). Changing a password ends other sessions. Password reset for a user who forgot it: the owner sets a temporary one (documented one-line SQL in `docs/RUNBOOK.md`), the user changes it at next sign-in.
+- Passwords: 10+ characters, mixed case and digits (set in Supabase). Changing a password ends other sessions. Password reset for a user who forgot it: the super user sets a temporary one (Admin > Users > Manage, or the SQL in `docs/RUNBOOK.md`), the user changes it at next sign-in. A password set by the super user ends every session of that user at once (Supabase sessions deleted; a session Supabase no longer has cannot start again).
+- The super user may rename and delete accounts (not his own, not another super user's; his own name only). A username stays with its account for good (`core.username_history`), so nobody inherits another person's files, history lines or audit entries; only the owner frees one in SQL. Delete requires the username typed again, server side too.
 
 ## 3. Database rules (the real wall)
 1. **Only `public` is exposed** to the API, and `public` holds **only functions**: never a table, view or sequence. Tables live in `core` or a tile schema, which the API cannot reach.
@@ -61,10 +62,10 @@ Every GitHub Pages site of one account shares one address (today `https://niyaz8
 ## 6. Accounts and keys
 - GitHub: 2FA on the owner account and every collaborator; secret scanning and push protection on in every DAME repo; rulesets on `main` block force push and deletion.
 - Supabase: owner only, MFA on. Secret key never leaves the dashboard. If anything sensitive is ever pasted in a chat or committed: rotate it at once (new key, revoke the old), then tell the admin project so `docs/STATUS.md` records it.
-- Departing team member: disable his DAME account in the admin page, remove him as collaborator from his tile repo.
+- Departing team member: disable his DAME account in the admin page (delete it later if no longer needed), remove him as collaborator from his tile repo.
 
 ## 7. Audit
-`core.audit` records sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, access and rights changes, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
+`core.audit` records sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, renames, passwords set and accounts deleted by the super user (never the password itself), access and rights changes, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
 
 ## 8. Checklist for every delivery (core or tile)
 - [ ] No internal data, key or password anywhere in the repo or its history

@@ -33,6 +33,7 @@ function claims(req) {
 function session(user_id) {
   const session_id = randomUUID(), refresh_token = randomUUID();
   sessions.set(refresh_token, { user_id, session_id });
+  sql(`insert into auth.sessions (id, user_id) values (${lit(session_id)}, ${lit(user_id)})`);
   return { access_token: token(user_id, session_id), refresh_token, expires_in: 3600, token_type: 'bearer', user: { id: user_id } };
 }
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(body === undefined ? '' : JSON.stringify(body)); }
@@ -65,7 +66,8 @@ async function api(req, res, path, url) {
     }
     if (url.searchParams.get('grant_type') === 'refresh_token') {
       const s = sessions.get(body.refresh_token);
-      if (!s) return json(res, 400, { error: 'invalid_grant', msg: 'Invalid Refresh Token' });
+      const live = s && sql(`select 1 from auth.sessions where id = ${lit(s.session_id)}`);
+      if (!s || !live.ok || !live.out) return json(res, 400, { error: 'invalid_grant', msg: 'Invalid Refresh Token' });
       sessions.delete(body.refresh_token);
       const rt = randomUUID(); sessions.set(rt, s);
       return json(res, 200, { access_token: token(s.user_id, s.session_id), refresh_token: rt, expires_in: 3600, user: { id: s.user_id } });

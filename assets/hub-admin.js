@@ -74,7 +74,8 @@
       el('p', { class: 'muted', text: 'The person signs in with this username and the temporary password, and must choose a new password at the first sign-in. No email is needed.' }),
       field('user', 'Username', '3 to 30 characters: lower-case letters, digits, dot, dash, underscore.', { maxlength: 30, autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' }),
       field('name', 'Display name', null, { maxlength: 60, autocomplete: 'off' }),
-      field('pass', 'Temporary password', 'At least 10 characters with lower case, upper case and a digit. Tell it to the person by voice, not in writing.', { autocomplete: 'off' }),
+      field('pass', 'Temporary password', 'At least 10 characters with lower case, upper case and a digit. Tell it to the person by voice, not in writing.', { autocomplete: 'off', spellcheck: 'false' }),
+      el('div', { class: 'row' }, el('button', { class: 'btn small', type: 'button', text: 'Generate', on: { click: function () { body.querySelector('#nu-pass').value = makePassword(); } } })),
       err);
     Core.sheet({ title: 'New user', body: body, actions: [
       { label: 'Cancel', value: false },
@@ -102,22 +103,139 @@
         el('td', null, status),
         el('td', null, u.tiles.length ? u.tiles.join(', ') : el('span', { class: 'faint', text: '-' })),
         el('td', { text: u.last_sign_in ? Core.dateTime(u.last_sign_in) : '-' }));
-      var actions = el('td', { class: 'actions' });
-      if (!u.is_super && u.username !== Core.user.username) {
-        if (u.status === 'active') actions.appendChild(el('button', { class: 'btn small danger', type: 'button', text: 'Disable', on: { click: function (e) { var btn = e.currentTarget;
-          Core.confirm('Disable ' + u.username + '? He is signed out at once and cannot sign in until enabled again.', { ok: 'Disable', danger: true }).then(function (yes) {
-            if (!yes) return;
-            Core.busy(btn, function () { return Api.rpc('core_admin_set_status', { p_user: u.id, p_status: 'disabled' }); }).then(loadUsers).catch(Core.showError);
-          });
-        } } }));
-        else actions.appendChild(el('button', { class: 'btn small', type: 'button', text: u.status === 'pending' ? 'Approve' : 'Enable', on: { click: function (e) { var btn = e.currentTarget;
-          Core.busy(btn, function () { return Api.rpc('core_admin_set_status', { p_user: u.id, p_status: 'active' }); }).then(function () { loadUsers(); countRequests(); }).catch(Core.showError);
-        } } }));
-      }
+      var actions = el('td', { class: 'actions' },
+        el('button', { class: 'btn small', type: 'button', text: 'Manage', 'aria-label': 'Manage ' + u.username, on: { click: function () { manageUser(u); } } }));
       tr.appendChild(actions);
       body.appendChild(tr);
     });
     table.appendChild(body); host.appendChild(table);
+  }
+
+  // Temporary password: 14 characters, no look-alikes (0/O, 1/l/I), always lower + upper + digit.
+  function makePassword() {
+    var sets = ['abcdefghijkmnpqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789'], all = sets.join(''), out = [];
+    var rnd = new Uint32Array(14); crypto.getRandomValues(rnd);
+    for (var i = 0; i < 14; i++) { var set = i < 3 ? sets[i] : all; out.push(set[rnd[i] % set.length]); }
+    for (var j = out.length - 1; j > 0; j--) { var k = rnd[j] % (j + 1), t = out[j]; out[j] = out[k]; out[k] = t; }
+    return out.join('');
+  }
+
+  // Admin > Users > Manage: name, password, disable / enable, delete. Super users and oneself: name only.
+  function manageUser(u) {
+    var self = u.username === Core.user.username, internal = !u.email || u.email.indexOf('@' + DAME_CONFIG.INTERNAL_DOMAIN) >= 0;
+    var limited = self || u.is_super, changed = false, sheetBox = null;
+    function close() { var b = sheetBox && sheetBox.lastElementChild.querySelector('button'); if (b) b.click(); }
+    function field(id, label, value, hint, attrs) {
+      var input = el('input', Object.assign({ id: 'mu-' + id, value: value || '' }, attrs || {}));
+      return el('div', { class: 'field' }, el('label', { for: 'mu-' + id, text: label }), input, hint ? el('span', { class: 'hint', text: hint }) : null);
+    }
+    function note(kind) { return el('p', { class: 'notice ' + kind, hidden: true, role: kind === 'danger' ? 'alert' : 'status' }); }
+    function say(box, text) { box.textContent = text; box.hidden = false; }
+    function badge(st) { return el('span', { class: 'badge ' + (st === 'active' ? 'success' : st === 'pending' ? 'warning' : 'danger'), text: st }); }
+
+    var headName = el('strong', { text: u.display_name }), headUser = el('span', { class: 'faint mono', text: '@' + u.username }), headBadge = badge(u.status);
+    var head = el('div', { class: 'card tight' },
+      el('div', { class: 'row between' }, el('div', null, headName, ' ', headUser), headBadge),
+      el('div', { class: 'muted', text: (internal ? 'Signs in with the username' : 'Signs in with ' + u.email) + ' - ' +
+        (u.tiles.length ? 'tiles: ' + u.tiles.join(', ') : 'no tiles') }));
+
+    // name
+    var nameErr = note('danger'), nameOk = note('success');
+    var nameBox = el('div', { class: 'stack' },
+      el('h3', { class: 'section-title', text: 'Name' }),
+      field('user', 'Username', u.username, internal
+        ? '3 to 30 characters: lower-case letters, digits, dot, dash, underscore. The person signs in with the new username at once; tell him.'
+        : '3 to 30 characters: lower-case letters, digits, dot, dash, underscore. Only the name shown changes; sign-in stays ' + u.email + '.',
+        { maxlength: 30, autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' }),
+      field('name', 'Display name', u.display_name, null, { maxlength: 60, autocomplete: 'off' }),
+      nameErr, nameOk,
+      el('div', { class: 'row end' }, el('button', { class: 'btn primary', type: 'button', id: 'mu-save', text: 'Save name', on: { click: function (e) {
+        var nu = nameBox.querySelector('#mu-user').value.trim().toLowerCase(), nn = nameBox.querySelector('#mu-name').value.trim();
+        nameErr.hidden = true; nameOk.hidden = true;
+        if (!Api.auth.validUsername(nu)) return say(nameErr, 'Please check the username.');
+        if (!nn) return say(nameErr, 'Please check the display name.');
+        if (nu === u.username && nn === u.display_name) return say(nameOk, 'Nothing to change.');
+        var old = u.username;
+        Core.busy(e.currentTarget, function () { return Api.rpc('core_admin_update_user', { p_user: u.id, p_username: nu, p_display_name: nn }); })
+          .then(function (r) {
+            u.username = r.username; u.display_name = r.display_name; changed = true;
+            headName.textContent = u.display_name; headUser.textContent = '@' + u.username;
+            nameBox.querySelector('#mu-user').value = u.username;
+            say(nameOk, old !== u.username
+              ? (internal ? 'Saved. ' + old + ' now signs in as ' + u.username + '.' : 'Saved. Shown as @' + u.username + ' from now on.')
+              : 'Saved.');
+            if (self) setTimeout(function () { window.location.reload(); }, 900);
+          }, function (ex) { say(nameErr, Api.errorMessage(ex)); });
+      } } })));
+
+    var parts = [head, nameBox];
+
+    if (!limited) {
+      // password
+      var passErr = note('danger'), passOk = note('success');
+      var must = el('input', { type: 'checkbox', id: 'mu-must', checked: true });
+      var passBox = el('div', { class: 'stack' },
+        el('h3', { class: 'section-title', text: 'Password' }),
+        field('pass', 'New password', '', 'At least 10 characters with lower case, upper case and a digit. Tell it to the person by voice, not in writing.', { autocomplete: 'off', spellcheck: 'false', autocapitalize: 'none' }),
+        el('label', { class: 'check', for: 'mu-must' }, must, 'Ask for a new password at the next sign-in (recommended)'),
+        passErr, passOk,
+        el('div', { class: 'row between' },
+          el('button', { class: 'btn', type: 'button', text: 'Generate', on: { click: function () { passBox.querySelector('#mu-pass').value = makePassword(); } } }),
+          el('button', { class: 'btn primary', type: 'button', id: 'mu-setpass', text: 'Set password', on: { click: function (e) {
+            var p = passBox.querySelector('#mu-pass').value; passErr.hidden = true; passOk.hidden = true;
+            if (!Api.auth.validPassword(p)) return say(passErr, Api.messages.WEAK_PASSWORD);
+            Core.busy(e.currentTarget, function () { return Api.rpc('core_admin_set_password', { p_user: u.id, p_password: p, p_must_change: must.checked }); })
+              .then(function () {
+                changed = true;
+                say(passOk, 'Password set. ' + u.username + ' is signed out everywhere' + (must.checked ? ' and must choose a new password at the next sign-in.' : '.'));
+              }, function (ex) { say(passErr, Api.errorMessage(ex)); });
+          } } })));
+      parts.push(passBox);
+
+      // account: disable / enable, delete
+      var accErr = note('danger');
+      var statusBtn = el('button', { class: 'btn' + (u.status === 'active' ? ' danger' : ''), type: 'button', id: 'mu-status',
+        text: u.status === 'active' ? 'Disable' : u.status === 'pending' ? 'Approve' : 'Enable', on: { click: function (e) {
+          var to = u.status === 'active' ? 'disabled' : 'active'; accErr.hidden = true;
+          Core.busy(e.currentTarget, function () { return Api.rpc('core_admin_set_status', { p_user: u.id, p_status: to }); })
+            .then(function () {
+              u.status = to; changed = true;
+              var nb = badge(to); headBadge.parentNode.replaceChild(nb, headBadge); headBadge = nb;
+              statusBtn.textContent = to === 'active' ? 'Disable' : 'Enable'; statusBtn.className = 'btn' + (to === 'active' ? ' danger' : '');
+              Core.toast(to === 'active' ? u.username + ' is active' : u.username + ' is disabled and signed out');
+            }, function (ex) { say(accErr, Api.errorMessage(ex)); });
+        } } });
+      var confirmInput = el('input', { id: 'mu-confirm', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', 'aria-label': 'Type the username to confirm' });
+      var delGo = el('button', { class: 'btn danger', type: 'button', id: 'mu-delete-go', text: 'Delete for good', disabled: true, on: { click: function (e) {
+        accErr.hidden = true;
+        Core.busy(e.currentTarget, function () { return Api.rpc('core_admin_delete_user', { p_user: u.id, p_confirm: confirmInput.value }); })
+          .then(function () { changed = true; Core.toast('Deleted ' + u.username, 'success'); close(); },
+            function (ex) { say(accErr, Api.errorMessage(ex)); });
+      } } });
+      confirmInput.addEventListener('input', function () { delGo.disabled = confirmInput.value.trim().toLowerCase() !== u.username; });
+      var delBox = el('div', { class: 'notice danger stack', hidden: true },
+        el('div', null, 'This removes the account, its sign-in and all its tile access. What ', el('strong', { text: u.username }),
+          ' wrote in tiles stays, and the username cannot be given to anyone else. It cannot be undone.'),
+        el('div', { class: 'field' }, el('label', { for: 'mu-confirm', text: 'Type ' + u.username + ' to confirm' }), confirmInput),
+        el('div', { class: 'row end' }, delGo));
+      var accBox = el('div', { class: 'stack' },
+        el('h3', { class: 'section-title', text: 'Account' }),
+        el('p', { class: 'muted', text: 'Disable signs the person out at once and can be undone. Delete cannot.' }),
+        el('div', { class: 'row between' }, statusBtn,
+          el('button', { class: 'btn danger', type: 'button', id: 'mu-delete', text: 'Delete account', on: { click: function () {
+            delBox.hidden = !delBox.hidden; if (!delBox.hidden) { confirmInput.value = ''; delGo.disabled = true; confirmInput.focus(); }
+          } } })),
+        delBox, accErr);
+      parts.push(accBox);
+    } else {
+      parts.push(el('p', { class: 'muted', text: self
+        ? 'Your own password is changed on the Account page.'
+        : 'A super user\'s password and account are managed in the SQL editor (RUNBOOK).' }));
+    }
+
+    Core.sheet({ title: 'Manage ' + u.display_name, body: el('div', { class: 'stack' }, parts),
+      actions: [{ label: 'Close', value: true }], onOpen: function (box) { sheetBox = box; } })
+      .then(function () { if (changed) { loadUsers(); countRequests(); } });
   }
 
   // ---------- tiles ----------

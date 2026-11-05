@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script. Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 008). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -22,7 +22,9 @@ begin
   if p_key is null then
     perform set_config('request.jwt.claims', '', true); perform set_config('role', 'anon', true); return;
   end if;
+  execute 'reset role';
   select id into v_id from t_ids where k = p_key;
+  insert into auth.sessions (id, user_id, created_at, updated_at) values (v_sid, v_id, now(), now()); -- as Supabase Auth at sign-in
   perform set_config('request.jwt.claims', json_build_object('sub', v_id, 'session_id', v_sid, 'role', 'authenticated', 'email', (select email from auth.users where id = v_id))::text, true);
   perform set_config('role', 'authenticated', true);
 end $$;
@@ -246,6 +248,109 @@ begin
   perform pg_temp.expect_error('select public.core_me()', 'SIGNED_OUT');
   reset role;
   raise notice 'account ok';
+
+  -- ---- 008: the super user manages accounts (rename, password, delete)
+  declare v_tu uuid := (select id from t_ids where k = 't.user');
+  begin
+    -- anon and non-super refused
+    perform pg_temp.act_as(null);
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''x.y'', ''x'')', v_tu), 'PERMISSION');
+    perform pg_temp.expect_error(format('select public.core_admin_set_password(%L, ''NewPass2026x'', true)', v_tu), 'PERMISSION');
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''t.user'')', v_tu), 'PERMISSION');
+    perform pg_temp.act_as('t.none'); perform public.core_session_start();
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''x.y'', ''x'')', v_tu), 'NO_RIGHT');
+    perform pg_temp.expect_error(format('select public.core_admin_set_password(%L, ''NewPass2026x'', true)', v_tu), 'NO_RIGHT');
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''t.user'')', v_tu), 'NO_RIGHT');
+    perform pg_temp.expect_error('select core.release_username(''t.user'')', 'PERMISSION');
+    reset role;
+  end;
+  raise notice 'manage users refused ok';
+
+  declare v_claims text; v_made uuid; v_tu uuid := (select id from t_ids where k = 't.user'); v_super uuid := (select id from t_ids where k = 't.super');
+  begin
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    -- rename an owner-created account: the internal sign-in address moves with it
+    perform public.core_admin_create_user('t.mk', 'Mk', 'TempPass2026');
+    reset role;
+    v_made := (select id from core.profiles where username = 't.mk');
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    select public.core_admin_update_user(v_made, ' T.Mk2 ', 'Mk Two') into v;
+    if v ->> 'username' <> 't.mk2' or v ->> 'signs_in_with' <> 'username' then raise exception 'rename: %', v; end if;
+    reset role;
+    if (select email from auth.users where id = v_made) <> 't.mk2@users.dame-hub.local' then raise exception 'internal email not moved'; end if;
+    if (select identity_data ->> 'email' from auth.identities where user_id = v_made) <> 't.mk2@users.dame-hub.local' then raise exception 'identity not moved'; end if;
+    if (select display_name from core.profiles where id = v_made) <> 'Mk Two' then raise exception 'display name'; end if;
+    if not exists (select 1 from core.username_history where username = 't.mk' and user_id = v_made) then raise exception 'history'; end if;
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    -- a retired name stays with its account: others refused (admin, sign-up), the same account takes it back
+    perform pg_temp.expect_error($q$select public.core_admin_create_user('t.mk', 'x', 'TempPass2026')$q$, 'TAKEN:username');
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''t.mk'', ''x'')', v_tu), 'TAKEN:username');
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''t.admin'', ''x'')', v_tu), 'TAKEN:username');
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''Bad Name!'', ''x'')', v_tu), 'INVALID:username');
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''t.user'', ''  '')', v_tu), 'INVALID:display_name');
+    perform pg_temp.expect_error(format('select public.core_admin_update_user(%L, ''t.zz'', ''x'')', gen_random_uuid()), 'NOT_FOUND');
+    select public.core_admin_update_user(v_made, 't.mk', 'Mk Two') into v;
+    if v ->> 'username' <> 't.mk' then raise exception 'take back'; end if;
+    select public.core_admin_update_user(v_made, 't.mk3', 'Mk Two') into v;
+    -- an email account: only the handle changes, the address stays
+    select public.core_admin_update_user(v_tu, 't.user2', 'Test User') into v;
+    if v ->> 'signs_in_with' <> 'email' then raise exception 'email account'; end if;
+    reset role;
+    if (select email from auth.users where id = v_tu) <> 't.user@example.com' then raise exception 'email changed'; end if;
+    perform pg_temp.expect_error($q$insert into auth.users (email, raw_user_meta_data) values ('x9@example.com', '{"username":"t.mk2"}')$q$, 'TAKEN:username');
+    raise notice 'rename ok';
+
+    -- set password: every session of the user ends, the old token cannot start one again
+    insert into t_ids values ('t.mk3', v_made);
+    perform pg_temp.act_as('t.mk3'); perform public.core_session_start(); perform public.core_me();
+    v_claims := current_setting('request.jwt.claims');
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform pg_temp.expect_error(format('select public.core_admin_set_password(%L, ''NewPass2026x'', true)', v_super), 'INVALID:user');
+    perform pg_temp.expect_error(format('select public.core_admin_set_password(%L, ''short'', true)', v_made), 'INVALID:password');
+    perform pg_temp.expect_error(format('select public.core_admin_set_password(%L, ''NewPass2026x'', true)', gen_random_uuid()), 'NOT_FOUND');
+    select public.core_admin_set_password(v_made, 'KeepPass2026x', false) into v;
+    if (v ->> 'must_change_password')::boolean then raise exception 'keep password'; end if;
+    reset role;
+    if (select encrypted_password from auth.users where id = v_made) <> extensions.crypt('KeepPass2026x', (select encrypted_password from auth.users where id = v_made)) then raise exception 'password not set'; end if;
+    if exists (select 1 from auth.sessions where user_id = v_made) then raise exception 'sessions not ended'; end if;
+    perform set_config('request.jwt.claims', v_claims, true); perform set_config('role', 'authenticated', true);
+    perform pg_temp.expect_error('select public.core_me()', 'SIGNED_OUT');
+    perform pg_temp.expect_error('select public.core_session_start()', 'SIGNED_OUT');
+    reset role;
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform public.core_admin_set_password(v_made, 'TempPass2027', null);
+    reset role;
+    if not (select must_change_password from core.profiles where id = v_made) then raise exception 'reset flag'; end if;
+    raise notice 'set password ok';
+
+    -- delete: confirm by username, never self or a super user; access goes with the account, the name stays retired
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform public.core_tile_access_set('t-tile', v_made, true);
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''t.mk'')', v_made), 'INVALID:confirm');
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''t.super'')', v_super), 'INVALID:user');
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''x'')', gen_random_uuid()), 'NOT_FOUND');
+    select public.core_admin_delete_user(v_made, ' T.Mk3 ') into v;
+    if not (v ->> 'deleted')::boolean then raise exception 'delete'; end if;
+    reset role;
+    if exists (select 1 from auth.users where id = v_made) or exists (select 1 from core.profiles where id = v_made)
+       or exists (select 1 from core.tile_access where user_id = v_made) or exists (select 1 from auth.identities where user_id = v_made) then
+      raise exception 'delete left rows'; end if;
+    if not exists (select 1 from core.username_history where username = 't.mk3') then raise exception 'deleted name not retired'; end if;
+    if not exists (select 1 from core.audit where action = 'user_delete' and detail ->> 'user' = 't.mk3') then raise exception 'delete audit'; end if;
+    -- a tile row tied to the account by a blocking foreign key: refused, nothing removed
+    create table core.t_fk (user_id uuid references core.profiles (id)); -- rolled back with the rest
+    insert into core.t_fk values ((select id from t_ids where k = 't.disabled'));
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''t.disabled'')', (select id from t_ids where k = 't.disabled')), 'IN_USE:user');
+    reset role;
+    drop table core.t_fk;
+    if not exists (select 1 from core.profiles where username = 't.disabled') then raise exception 'blocked delete removed rows'; end if;
+    if exists (select 1 from core.username_history where username = 't.disabled') then raise exception 'blocked delete retired name'; end if;
+    -- owner frees a retired name
+    perform core.release_username('t.mk3');
+    perform pg_temp.expect_error('select core.release_username(''t.mk3'')', 'NOT_FOUND');
+    raise notice 'delete ok';
+  end;
 
   -- ---- applied() refuses a second run
   perform pg_temp.expect_error('select core.applied(''dame-hub'', ''001_init'')', 'ALREADY_APPLIED: dame-hub/001_init');

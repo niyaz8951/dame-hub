@@ -46,6 +46,10 @@ alter table auth.users add column instance_id uuid, add column aud text, add col
   add column raw_app_meta_data jsonb, add column confirmation_token text, add column recovery_token text, add column email_change_token_new text,
   add column email_change text, add column email_change_token_current text, add column phone_change text, add column phone_change_token text,
   add column reauthentication_token text;
-create table auth.identities (id uuid primary key, user_id uuid references auth.users(id), identity_data jsonb, provider text, provider_id text,
+create table auth.identities (id uuid primary key, user_id uuid references auth.users(id) on delete cascade, identity_data jsonb, provider text, provider_id text,
   last_sign_in_at timestamptz, created_at timestamptz, updated_at timestamptz);
 grant all on auth.identities to supabase_auth_admin;
+-- Supabase sessions (refresh tokens hang off them); the JWT claim session_id is auth.sessions.id
+create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz default now(), updated_at timestamptz default now());
+grant all on auth.sessions to supabase_auth_admin;

@@ -7,8 +7,10 @@ grant select on t_ids to public;
 create or replace function pg_temp.act_as(p_key text) returns void language plpgsql as $$
 declare v_id uuid; v_sid uuid := gen_random_uuid();
 begin
+  execute 'reset role';
   if p_key is null then perform set_config('request.jwt.claims', '', true); perform set_config('role', 'anon', true); return; end if;
   select id into v_id from t_ids where k = p_key;
+  insert into auth.sessions (id, user_id, created_at, updated_at) values (v_sid, v_id, now(), now()); -- as Supabase Auth at sign-in
   perform set_config('request.jwt.claims', json_build_object('sub', v_id, 'session_id', v_sid, 'role', 'authenticated')::text, true);
   perform set_config('role', 'authenticated', true);
   perform public.core_session_start();
