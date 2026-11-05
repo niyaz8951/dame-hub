@@ -3,7 +3,7 @@
 ## What this project is
 The **Maps** tile of DAME, the internal team site at `https://niyaz8951.github.io/dame-hub/`.
 Tile id `maps` - repo `niyaz8951/maps` - address `https://niyaz8951.github.io/maps/` (served at `/maps/`) - schema `maps` - functions `public.maps_*` - no bucket (no files are stored; see Tile decisions).
-What it does: the team's **Maps tool from Thinkneering** (`niyaz8951/Thinkneering`, `public/tools/maps/`), improved while it moves. A map is a tree of branches with notes, special notes and links. Three kinds: **knowledge** (product or process understanding), **piping** (chilled and condenser water: flows, temperatures, pressures, pumps, a Flow view and a 2D schematic) and **wiring** (supply to equipment: power, BMS and fire-alarm control, demand, load shedding, single-line diagram, cable schedule).
+What it does: the team's **Maps tool from Thinkneering** (`niyaz8951/Thinkneering`, `public/tools/maps/`), improved while it moves. A map is a tree of branches with notes, special notes and links. Four kinds: **knowledge** (product or process understanding), **flowchart** (steps in ISO 5807 shapes joined by arrows, in lanes; a Flowchart or a Process flow such as an escalation ladder), **piping** (chilled and condenser water: flows, temperatures, pressures, pumps, a Flow view and a 2D schematic) and **wiring** (supply to equipment: power, BMS and fire-alarm control, demand, load shedding, single-line diagram, cable schedule).
 Team: owner (Niyaz) for now. Tile admin: owner.
 
 ## Directions come from the admin project
@@ -34,7 +34,8 @@ Then read this tile's `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md`,
 - SQL files go to the owner, who reads and applies them. Never ask for or accept the Supabase secret key or database password.
 
 ## Tile decisions
-- 2026-11-05 (owner) - **Three kinds only: knowledge, piping, wiring.** The AI rule book and Vocabulary kinds, the rule-book Flow view ("Follow a clause"), `mp_ai_flow`, `ai_map_links`, `ai_vocab_links` and every AI wording are left out. Nothing in this tile depends on the `projects` tile, and nothing there depends on a map.
+- 2026-11-05 (owner) - **Flowcharts are a fourth kind** (added after the start; see the tile's `docs/TILE.md`, Decisions): built in step 3 before piping and wiring; a flowchart may be set as a **Process flow** (reply arrows, notes in the box, Note shape, groups; Start and End optional).
+- 2026-11-05 (owner) - **Knowledge, flowchart, piping, wiring; nothing else.** The AI rule book and Vocabulary kinds, the rule-book Flow view ("Follow a clause"), `mp_ai_flow`, `ai_map_links`, `ai_vocab_links` and every AI wording are left out. Nothing in this tile depends on the `projects` tile, and nothing there depends on a map.
 - 2026-11-05 (owner) - **No pictures.** The old tool stopped using them on 20 Oct 2026 ("text first"): no `mp_images`, no bucket.
 - 2026-11-05 (owner) - **Start empty.** No migration from the old database. A person may carry a map across by hand: old tool **Export** (plain outline) -> new tool **Import**. Import therefore accepts the old outline exactly, including the old special-note lines (`Flow: 12 l/s`, `Place: 120, 80`, `Icon: pump`, `Source: chiller` ...), which it turns into typed properties.
 - 2026-11-05 (owner) - **Improve while moving** (the admin project's proposal, accepted in full):
@@ -55,8 +56,9 @@ Then read this tile's `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md`,
 ## Scope, in this order; one step delivered and checked by the owner before the next starts
 1. **Foundation and knowledge maps** - schema `maps` (maps, branches with type / properties / place, lines, history, trash, versions), `docs/TILE.md` with the rights; list, search across maps, add map (blank or knowledge starter), Map and Outline views, read / edit, branch editor (title, notes, special notes, links), move and delete with trash, share, verify and "changed since verified", history, clash guard, Import (including the old outline) and Export, phone layout. Files split by job.
 2. **Knowledge extras** - review list, "linked from", links to tiles, more starter templates, print.
-3. **Piping** - types and forms, pipes, Chilled water template, water engine, Flow view, 2D view with drag to place, Arrange by feed, pipe schedule, sizing check, index circuit and pump head, saved scenarios, SI / IP, 2D export and print.
-4. **Wiring** - types and forms, wires, Electricity template and unit wiring, power engine (BMS, fire alarm, demand, shedding), single-line 2D, cable schedule, BMS points schedule, breaker and voltage-drop checks, export and print; indicative ampacity once the owner gives the cable table.
+3. **Flowcharts** - kind `flowchart`: ISO 5807 shapes, lanes, arrows, drag to place, auto layout, check and ways through, walk through, Mermaid and outline import / export, SVG / Excel / print; Process flow style (reply arrows, notes in the box, Note shape, groups).
+4. **Piping** - types and forms, pipes, Chilled water template, water engine, Flow view, 2D view with drag to place, Arrange by feed, pipe schedule, sizing check, index circuit and pump head, saved scenarios, SI / IP, 2D export and print.
+5. **Wiring** - types and forms, wires, Electricity template and unit wiring, power engine (BMS, fire alarm, demand, shedding), single-line 2D, cable schedule, BMS points schedule, breaker and voltage-drop checks, export and print; indicative ampacity once the owner gives the cable table.
 
 ## Delivery
 Push (or zip) + the SQL files in order (`db/maps/NNN_*.sql`, each ending with `select core.applied('maps', 'NNN_name');`, plus `db/maps/tests.sql` with allowed and refused calls for every function: signed out, pending, disabled, no tile, no right, private map of another user, stale version) + the security-check step + update `docs/STATUS.md`. The engines' checks run as plain `node` scripts in `dev/`. Say what the owner should try, on a laptop and a phone, day and night.

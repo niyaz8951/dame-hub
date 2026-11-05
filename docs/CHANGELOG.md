@@ -2,6 +2,12 @@
 
 What was built and decided, by date, with the owner's words where a decision came from him. The current state and next steps are in `docs/STATUS.md`; changes that tiles must act on are in `docs/TILE-CHANGES.md`.
 
+## Review (2026-11-05 evening, owner: "review and suggest what is done, or some step missed, and way forward")
+- Contract scan of `hvac-notes`, `projects`, `maps`, `tools`: clean (details in `docs/STATUS.md`, Next).
+- `docs/tiles/maps-project-instructions.md`: flowcharts as a fourth kind, scope renumbered (Maps' core request).
+- `docs/TILES.md`: status of `hvac-notes`, `projects`, `maps` brought up to date from their repos.
+- Found: nine SQL files waiting on live across core and tiles; `maps` and `hvac-notes` without `db/migrations.json` / `CLAUDE.md`; theme-color line missing on `hvac-notes/publish.html` and the four tool pages; `HVAC` no longer public, backup to confirm; no staging and no restorable backup while live holds real work.
+
 ## Health and housekeeping (2026-11-05, owner: "what quick wins we have here?"; "once approved by IT the public repo might be shifted to private or some other method")
 - `db/core/009_tile_users.sql`: `core.tile_users(p_tile)` for the Share sheet of `projects` (its open core request). Super users are included (they can open every tile); pending, disabled and users without the tile never are.
 - `db/core/010_health.sql`: table `core.health` (one row per run of `core.security_check()`, kept 180 days), `core.run_health(source)` (stores the result; an audit line `security_check_problems` whenever something is found, never for a clean run), nightly pg_cron job `dame-health` at 22:15 UTC (02:15 Dubai; skipped with a notice where pg_cron is missing), `public.core_admin_health()` and `public.core_admin_health_run()` (super user only; object names only, no table rows).
