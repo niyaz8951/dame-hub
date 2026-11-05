@@ -11,7 +11,7 @@ Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; overrides anything below unless the owner decided otherwise for this tile.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.
-4. `docs/STATUS.md`, section "Changes tiles must know".
+4. `docs/TILE-CHANGES.md` (every change to the core or the rule book, newest first; it replaces the old STATUS section "Changes tiles must know").
 5. `demo/` - a complete tile that follows the contract; `tools/` - pages brought over from an older site.
 If the repo cannot be read, use the copies in this project's knowledge and say so.
 

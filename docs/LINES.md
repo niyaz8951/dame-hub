@@ -36,7 +36,7 @@ One short line in the dashboard hero, in place of the old tile count. A new one 
 3. Search for new material: recent HVAC news (last 60 days), anniversaries in the coming months, history, standards, engineering rules of thumb. Check each against a source.
 4. Add 20-30 lines, none the same as an existing one in substance. Balance the kinds.
 5. Run `node dev/lines-check.mjs` until it says OK. Look at a few on a phone width if any is near 200 characters.
-6. Push to `main` with the message `Lines: +<n>, -<m> expired`. Add one line to `docs/STATUS.md` under "Dashboard lines" (date, count). No SQL, no security check; the site updates about a minute after the push (the browser may keep the old list up to 10 minutes).
+6. Push to `main` with the message `Lines: +<n>, -<m> expired`. Add one line to "Log" at the end of this file (date, added, expired). No SQL, no security check; the site updates about a minute after the push (the browser may keep the old list up to 10 minutes).
 
 ## How the page shows it
 - Its own row across the full width of the banner, under a thin divider, centred. A long line fills the first row and wraps centred below.
@@ -46,3 +46,6 @@ One short line in the dashboard hero, in place of the old tile count. A new one 
 - Remembers the ids of the last shown lines in `localStorage` (`dame.lines.recent`, cleared on sign-out with the other `dame.` keys): half the list, at most 40. Picks at random from the rest.
 - If the file cannot be read, the hero shows the date and greeting only.
 - Grows comfortably to about 2,000 lines (around 300 KB). Past that, split into several files and load one at random; that change is in `assets/hub-dashboard.js` only.
+
+## Log
+- 2026-11-05: 76 lines (first batch).

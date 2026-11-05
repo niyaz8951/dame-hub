@@ -5,9 +5,15 @@ Everything here is done by the owner in the GitHub or Supabase dashboard. Nothin
 ## Apply a SQL file
 1. Open the file in the repo and read it: only its own schema, its own `public.<prefix>_*` functions, its own bucket and policies; nothing granted to `anon` or `public`.
 2. Supabase > **SQL editor** > paste the whole file > Run. The last line prints `applied <repo>/<name>`; a file that already ran stops with `ALREADY_APPLIED`.
-3. `select * from core.security_check();` - must return **no rows**. Then **Advisors > Security Advisor** - no errors.
-4. Record it in `docs/STATUS.md` ("SQL applied").
+3. Admin > **Health** > **Run check now** - must say **Clean** (same as `select * from core.security_check();` returning no rows). Then Supabase **Advisors > Security Advisor** - no errors.
+4. Admin > Health > **SQL files** shows what is still waiting, in order. `docs/STATUS.md` ("SQL applied") records it at the next delivery.
 Order: staging first (while it exists as a separate project), test, then live. A fix is a new numbered file, never an edit.
+
+## Health (Admin > Health)
+- **Security check**: the last result of `core.security_check()`, run every night at 02:15 Dubai (pg_cron job `dame-health`) and whenever you press **Run check now**. Anything listed is a hole in the wall: switch off the tile that owns the object (Tiles), then tell the admin project the object's name. Every run that finds something also leaves an audit line `security_check_problems`.
+- **Nightly check off / not installed**: Supabase > Integrations > **Cron** > enable, then run the `do $schedule$ ... $schedule$;` block at the end of `db/core/010_health.sql` again. To see the job: `select jobname, schedule, active from cron.job;`; its last runs: `select status, start_time from cron.job_run_details order by start_time desc limit 5;`.
+- **SQL files**: per repo, the files its `db/migrations.json` lists that have not run here, in order, each linked. Run them top to bottom (core first), reading each one. "No list" means the tile has not published its list yet; its applied count is shown.
+- The red number on the tab = problems + waiting files.
 
 ## First run on a fresh project
 1. `db/core/001_init.sql`, then the security check.
@@ -64,7 +70,7 @@ Admin page > Users > Manage > Disable (delete later, once nobody needs his accou
 ## Add a staging project
 1. Supabase: new project `dame-staging`, same Auth settings as `01-SETUP.md` step 2.4, Site URL and redirects the same.
 2. Run `db/core/001_init.sql`, `seed-staging.sql`, every tile's SQL; security check.
-3. `core/v1/config.js`: `STAGING = { url, key }`; add the staging URL to `img-src` and `connect-src` in the CSP line of every page (core and tiles) and in `core/v1/README.md`; announce it in `docs/STATUS.md` under "Changes tiles must know".
+3. `core/v1/config.js`: `STAGING = { url, key }`; add the staging URL to `img-src` and `connect-src` in the CSP line of every page (core and tiles) and in `core/v1/README.md`; announce it in `docs/TILE-CHANGES.md`.
 
 ## Install the app (team instructions)
 One app for the whole site; tiles open inside it. Sign in first, then in the account menu (top right) tap **Install app**.

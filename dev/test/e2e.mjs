@@ -159,6 +159,39 @@ try {
   await expect(true, 'audit filter by tile');
   await shot(page, 'admin');
 
+  log('admin health');
+  await page.click('[data-tab=health]');
+  await page.waitForSelector('#health-check .card'); await page.waitForSelector('#health-sql table');
+  await expect((await page.textContent('#health-check')).includes('Clean'), 'security check clean');
+  await expect((await page.textContent('#health-check')).includes('Nightly check not installed'), 'no pg_cron locally: shown as not installed');
+  await expect(await page.isHidden('#count-health'), 'no health badge when all is well');
+  const sqlRow = async (id) => page.textContent(`#health-sql tbody tr:has(td span.mono:text-is("${id}"))`);
+  await expect((await sqlRow('dame-hub')).includes('Up to date'), 'core SQL up to date');
+  await expect((await sqlRow('demo')).includes('Up to date'), 'demo (inside core) SQL read from /dame-hub/demo/db/migrations.json');
+  await expect((await sqlRow('hvac-notes')).includes('No list'), 'tile without a list shown as such');
+  await page.click('#health-run'); await page.waitForSelector('.toast.success');
+  await expect(true, 'run check now');
+  // a file that has not run shows as waiting, with a link, and the tab badge counts it
+  const ranAt = psql("select applied_at from core.migrations where repo = 'dame-hub' and name = '009_tile_users'");
+  psql("delete from core.migrations where repo = 'dame-hub' and name = '009_tile_users'");
+  await page.reload(); await page.waitForFunction(() => /\d+ waiting/.test(document.querySelector('#health-sql').textContent));
+  await expect((await sqlRow('dame-hub')).includes('1 waiting'), 'missing core file shown as waiting');
+  await expect(await page.isVisible('#health-sql a[href="/dame-hub/db/core/009_tile_users.sql"]'), 'link to the waiting file');
+  await expect((await page.textContent('#count-health')) === '1', 'health badge counts the waiting file');
+  psql(`insert into core.migrations (repo, name, applied_at) values ('dame-hub', '009_tile_users', '${ranAt}')`);
+  // a problem found by the check shows in the tab
+  psql('create table core.t_e2e (x int)');
+  await page.click('#health-run'); await page.waitForSelector('#health-check .badge.danger');
+  await expect((await page.textContent('#health-check')).includes('core.t_e2e'), 'problem object listed');
+  psql('drop table core.t_e2e');
+  await page.click('#health-run'); await page.waitForFunction(() => document.querySelector('#health-check') && document.querySelector('#health-check').textContent.includes('Clean'));
+  await expect(true, 'clean again after the fix');
+  await shot(page, 'admin-health');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'health tab: no sideways scroll at 390');
+  await shot(page, 'admin-health-390');
+  await page.setViewportSize({ width: 1100, height: 800 });
+
   log('demo tile as super');
   await page.goto(B + '/dame-hub/demo/');
   await page.waitForSelector('#notes .state, #notes .demo-note');

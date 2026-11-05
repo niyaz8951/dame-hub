@@ -1,0 +1,16 @@
+{
+  "repo": "dame-hub",
+  "note": "Every SQL file of this repo in run order. Admin > Health lists the ones not yet applied. Keep in step with db/: node dev/migrations-check.mjs",
+  "files": [
+    { "name": "001_init", "path": "db/core/001_init.sql" },
+    { "name": "002_email_domain", "path": "db/core/002_email_domain.sql", "superseded": true },
+    { "name": "003_email_domain", "path": "db/core/003_email_domain.sql", "superseded": true },
+    { "name": "004_email_signin", "path": "db/core/004_email_signin.sql" },
+    { "name": "005_owner_users", "path": "db/core/005_owner_users.sql" },
+    { "name": "006_display_names", "path": "db/core/006_display_names.sql" },
+    { "name": "007_tile_accent", "path": "db/core/007_tile_accent.sql" },
+    { "name": "008_manage_users", "path": "db/core/008_manage_users.sql" },
+    { "name": "009_tile_users", "path": "db/core/009_tile_users.sql" },
+    { "name": "010_health", "path": "db/core/010_health.sql" }
+  ]
+}

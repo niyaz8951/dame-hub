@@ -39,10 +39,11 @@ The tile id must not be the name of any other repo in the account.
 - **Accounts can be renamed and deleted** by the super user (2026-11-05). Key everything by user id (`v_user.id`), never by username; a username or display name saved next to a record is a label of that moment (show the current one through `core.display_names`, the saved one as fallback). A deleted user's id simply matches nobody: show the saved name. Never tie a tile table to `core.profiles` or `auth.users` with a foreign key that blocks a delete (no `references`, or `on delete cascade` / `set null` when the rows should go with the account). A retired username is never given to anyone else, so `<username>/...` Storage folders stay safe, but a renamed user's files stay under the old folder name: new tiles use `<user_id>/...` (`auth.uid()::text`).
 - **Tests:** a test that acts as a user inserts the Supabase session first, as sign-in does: `insert into auth.sessions (id, user_id, created_at, updated_at) values (v_sid, v_id, now(), now());` before `core_session_start()` (since 008, a session Supabase does not have is refused). See `demo/db/demo/tests.sql`, `pg_temp.act_as`.
 - `core.display_names('<tile-id>', ids uuid[])` -> `(id, username, display_name, active)` for the authors of shared records; pending accounts and unknown ids are left out, disabled users come back with `active = false`. Raises like `core.require_tile`. Callable only inside the tile's own functions, never from the page; return only the names the page needs.
+- `core.tile_users('<tile-id>')` -> `(id, username, display_name)` of the active users who can open the tile (given access, plus super users), by username: for "share with" or "assign to" lists. Same rules as `core.display_names`.
 - `core.audit('<tile-id>', action, detail jsonb)`
 - `core.applied('<repo>', 'NNN_name')` - last line of every SQL file
 
-**Versions:** all of the above live under `/dame-hub/core/v1/` and keep working. A change that could break a tile goes to `/dame-hub/core/v2/`; tiles move up when ready. Every change is listed in the admin repo's `docs/STATUS.md` under "Changes tiles must know".
+**Versions:** all of the above live under `/dame-hub/core/v1/` and keep working. A change that could break a tile goes to `/dame-hub/core/v2/`; tiles move up when ready. Every change is listed in the admin repo's `docs/TILE-CHANGES.md`, newest first.
 
 ## 3. A tile function, the pattern
 
@@ -74,11 +75,24 @@ Tables: `create table hvac_notes.<name> (...)`, then `alter table ... enable row
   assets/                 the tile's own css, js, images (prefixed, e.g. hn-*.css)
   vendor/                 copied libraries with licences (only if needed)
   db/<tile_id>/NNN_*.sql  schema, tables, functions, bucket and its policies; tests.sql
+  db/migrations.json      every NNN_*.sql in run order ("SQL list" below); Admin > Health reads it
+  CLAUDE.md               short brief for Claude / any agent: ids, checks, pointers to the rule book
   docs/TILE.md            what the tile does, its rights, its data, its decisions
   docs/STATUS.md          what is built, what is next, SQL applied where
   docs/CORE-REQUESTS.md   what the tile needs from the core (open / done)
   README.md               one paragraph + link to docs/TILE.md
 ```
+
+**SQL list.** `db/migrations.json` names every numbered SQL file of the repo in the order it runs:
+
+```json
+{ "repo": "<tile-id>", "files": [
+  { "name": "001_init", "path": "db/<tile_id>/001_init.sql" },
+  { "name": "002_replies", "path": "db/<tile_id>/002_replies.sql" }
+] }
+```
+
+`repo` is the first argument of the files' `core.applied` line; `"superseded": true` marks a file a later one replaced (not counted as waiting). A tile without SQL publishes `"files": []`. The file is public like every page and holds file names only. Check before every push: `node ../dame-hub/dev/migrations-check.mjs .` (needs `dame-hub` cloned next to the tile).
 
 ## 5. Rights
 A tile declares its rights in `docs/TILE.md` (e.g. `edit`, `reply`, `export`) with one line each. The super user enters the same list on the tile in the admin page; tile admins give them to users. Functions check them with `core.require_tile('<tile-id>', 'edit')`, Storage policies with `core.has_tile(auth.uid(), '<tile-id>', 'edit')`.
@@ -109,5 +123,5 @@ The admin project reads every tile's file at the start of each chat and answers 
 - [ ] Guard on every page and the check in every function use the same tile id and right
 - [ ] Day + night, 390 px, loading / empty / error states
 - [ ] `tests.sql`: allowed + refused cases for every new function, run on staging
-- [ ] SQL files numbered, ending with `core.applied`, never edited after live
+- [ ] SQL files numbered, ending with `core.applied`, never edited after live, listed in `db/migrations.json` (`node ../dame-hub/dev/migrations-check.mjs .` OK)
 - [ ] `docs/STATUS.md` updated; rights in `docs/TILE.md` match the admin page

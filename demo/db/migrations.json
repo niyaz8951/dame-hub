@@ -1,0 +1,6 @@
+{
+  "repo": "demo",
+  "files": [
+    { "name": "001_init", "path": "db/demo/001_init.sql" }
+  ]
+}

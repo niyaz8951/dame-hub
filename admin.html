@@ -28,6 +28,7 @@
     <button type="button" role="tab" aria-selected="false" data-tab="users">Users</button>
     <button type="button" role="tab" aria-selected="false" data-tab="tiles">Tiles</button>
     <button type="button" role="tab" aria-selected="false" data-tab="audit">Audit</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="health">Health<span class="badge danger count" id="count-health" hidden></span></button>
   </div>
 
   <section id="tab-requests">
@@ -58,6 +59,13 @@
     </div>
     <div id="audit" class="table-wrap"></div>
     <div class="row end"><button class="btn" type="button" id="audit-more" hidden>Load more</button></div>
+  </section>
+
+  <section id="tab-health" hidden>
+    <div class="stack">
+      <div id="health-check"></div>
+      <div id="health-sql"></div>
+    </div>
   </section>
 </main>
 </body>

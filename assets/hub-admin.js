@@ -1,4 +1,4 @@
-/* Admin page: requests, users, tiles, access, audit. Super user only. */
+/* Admin page: requests, users, tiles, access, audit, health. Super user only. */
 (function () {
   'use strict';
   var $ = Core.$, el = Core.el;
@@ -9,16 +9,20 @@
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [role=tab]'));
     function showTab(name) {
       tabs.forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === name)); $('#tab-' + b.dataset.tab).hidden = b.dataset.tab !== name; });
+      var sel = tabs.filter(function (b) { return b.dataset.tab === name; })[0];
+      if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // phones: the tab row scrolls sideways
       if (name === 'requests') loadRequests();
       if (name === 'users') loadUsers();
       if (name === 'tiles') loadTiles();
       if (name === 'audit') loadAudit(true);
+      if (name === 'health') loadHealth();
       if (window.location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
     }
     tabs.forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
     var start = window.location.hash.replace('#', '');
-    showTab(['requests', 'users', 'tiles', 'audit'].indexOf(start) >= 0 ? start : 'requests');
+    showTab(['requests', 'users', 'tiles', 'audit', 'health'].indexOf(start) >= 0 ? start : 'requests');
     countRequests();
+    if (start !== 'health') loadHealth(true);
   });
 
   function loading(host) { Core.clear(host); host.appendChild(el('div', { class: 'loading-veil' }, el('span', { class: 'spin' }), 'Loading')); }
@@ -335,6 +339,110 @@
       more.hidden = rows.length < 100; more.disabled = false;
     }).catch(function (err) { fail(host, err); });
   }
+  // ---------- health: security check + SQL files waiting to run ----------
+  // Each repo publishes db/migrations.json (docs/TILE-CONTRACT.md, "SQL list"); core.migrations says what ran.
+  function getList(base) {
+    return fetch(base + 'db/migrations.json', { cache: 'no-cache', credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return j && typeof j.repo === 'string' && Array.isArray(j.files) ? j : null; }, function () { return null; });
+  }
+  function sqlState(applied, tiles) {
+    var ran = {};
+    applied.forEach(function (m) { ran[m.repo + '/' + m.name] = m.applied_at; });
+    var repos = [{ id: 'dame-hub', name: 'Core', base: '/dame-hub/' }].concat(tiles.map(function (t) { return { id: t.id, name: t.name, base: Core.tilePath(t.id) }; }));
+    return Promise.all(repos.map(function (r) { return getList(r.base); })).then(function (lists) {
+      return repos.map(function (r, i) {
+        var list = lists[i], repo = list ? list.repo : r.id;
+        var waiting = list ? list.files.filter(function (f) { return !f.superseded && !ran[repo + '/' + f.name]; }) : [];
+        var listed = {};
+        if (list) list.files.forEach(function (f) { listed[f.name] = true; });
+        var ranCount = applied.filter(function (m) { return m.repo === repo; }).length;
+        var unlisted = list ? applied.filter(function (m) { return m.repo === repo && !listed[m.name]; }) : [];
+        return { repo: r, list: list, waiting: waiting, ranCount: ranCount, unlisted: unlisted };
+      });
+    });
+  }
+  function setHealthCount(n) { var c = $('#count-health'); c.textContent = String(n); c.hidden = !n; }
+
+  function loadHealth(countOnly) {
+    var hostCheck = $('#health-check'), hostSql = $('#health-sql');
+    if (!countOnly) { loading(hostCheck); Core.clear(hostSql); }
+    return Promise.all([Api.rpc('core_admin_health', {}), Api.rpc('core_admin_tiles', {})]).then(function (res) {
+      var h = res[0], tiles = res[1] || [];
+      return sqlState(h.applied || [], tiles).then(function (repos) {
+        var waiting = repos.reduce(function (n, r) { return n + r.waiting.length; }, 0);
+        var problems = h.last ? h.last.problems : 0;
+        setHealthCount(problems + waiting);
+        if (!countOnly) { renderCheck(hostCheck, h); renderSql(hostSql, repos, waiting); }
+      });
+    }).catch(function (err) {
+      if (countOnly) return;
+      if (err && err.code === 'NOT_FOUND') {   // 010_health.sql not applied yet
+        Core.clear(hostCheck);
+        hostCheck.appendChild(el('div', { class: 'notice warning' },
+          el('strong', { text: 'Health is not set up yet. ' }),
+          'Apply ', el('a', { href: '/dame-hub/db/core/010_health.sql', text: 'db/core/010_health.sql' }), ' in the Supabase SQL editor, then reload this page.'));
+        return;
+      }
+      fail(hostCheck, err);
+    });
+  }
+
+  function renderCheck(host, h) {
+    Core.clear(host);
+    var last = h.last, ok = last && last.problems === 0;
+    var nightly = h.nightly === true ? el('span', { class: 'badge success', text: 'Nightly check on' })
+      : el('span', { class: 'badge warning', text: h.nightly === false ? 'Nightly check off' : 'Nightly check not installed' });
+    var status = !last ? el('span', { class: 'badge', text: 'Never run' })
+      : ok ? el('span', { class: 'badge success', text: 'Clean' })
+      : el('span', { class: 'badge danger', text: last.problems + (last.problems === 1 ? ' problem' : ' problems') });
+    var run = el('button', { class: 'btn primary', type: 'button', id: 'health-run', text: 'Run check now', on: { click: function (e) {
+      Core.busy(e.currentTarget, function () { return Api.rpc('core_admin_health_run', {}); })
+        .then(function (r) { Core.toast(r.last && r.last.problems ? 'Check found ' + r.last.problems + ' problem(s)' : 'Check is clean', r.last && r.last.problems ? 'danger' : 'success'); loadHealth(); })
+        .catch(Core.showError);
+    } } });
+    var card = el('div', { class: 'card' },
+      el('div', { class: 'row between' },
+        el('div', { class: 'grow' },
+          el('h2', { text: 'Security check' }),
+          el('p', { class: 'muted', text: last ? 'Last run ' + Core.dateTime(last.ran_at) + ' (' + ({ nightly: 'nightly', admin: 'from this page', sql: 'SQL editor' }[last.source] || last.source) + ').' : 'Not run yet.' })),
+        el('div', { class: 'row' }, status, nightly)),
+      el('p', { class: 'muted', text: 'core.security_check() looks for anything that would weaken the wall: a table without RLS, something other than a function in public, a function open to signed-out visitors, a public bucket, a policy for anon. It must be clean. The Supabase Security Advisor is still checked by hand after every SQL file.' }));
+    if (last && last.problems) {
+      var table = el('table', null, el('thead', null, el('tr', null, el('th', { text: 'Problem' }), el('th', { text: 'Object' }))), el('tbody'));
+      last.detail.forEach(function (d) { table.tBodies[0].appendChild(el('tr', null, el('td', { text: d.problem }), el('td', { class: 'mono', text: d.object }))); });
+      card.appendChild(el('div', { class: 'table-wrap' }, table));
+      card.appendChild(el('p', { class: 'notice danger', text: 'Fix before anything else: switch off the tile that owns the object (Tiles), then tell the admin project which object is listed.' }));
+    }
+    if (h.failed_runs_30d && ok) card.appendChild(el('p', { class: 'muted', text: h.failed_runs_30d + ' earlier run(s) in the last 30 days found problems (see Audit, action security_check_problems).' }));
+    if (h.nightly !== true) card.appendChild(el('p', { class: 'notice warning', text: 'Nightly check: Supabase > Integrations > Cron > enable, then run the "schedule" block at the end of db/core/010_health.sql again.' }));
+    card.appendChild(el('div', { class: 'row end' }, run));
+    host.appendChild(card);
+  }
+
+  function renderSql(host, repos, waiting) {
+    var card = el('div', { class: 'card' },
+      el('div', { class: 'row between' },
+        el('h2', { class: 'grow', text: 'SQL files' }),
+        waiting ? el('span', { class: 'badge danger', text: waiting + ' waiting' }) : el('span', { class: 'badge success', text: 'All applied' })),
+      el('p', { class: 'muted', text: 'Files each repo lists in db/migrations.json that have not run on this database yet. Run them in the order shown (core first), read each one before it runs, then Run check now.' }));
+    var table = el('table', null, el('thead', null, el('tr', null, el('th', { text: 'Repo' }), el('th', { text: 'State' }), el('th', { text: 'Waiting, in order' }))), el('tbody'));
+    repos.forEach(function (r) {
+      var state, files = el('td');
+      if (!r.list) state = el('span', { class: 'badge warning', text: 'No list' + (r.ranCount ? ' (' + r.ranCount + ' ran)' : '') });
+      else if (r.waiting.length) state = el('span', { class: 'badge danger', text: r.waiting.length + ' waiting' });
+      else state = el('span', { class: 'badge success', text: r.list.files.length ? 'Up to date' : 'No SQL' });
+      r.waiting.forEach(function (f, i) {
+        files.appendChild(el('div', null, el('a', { class: 'mono', href: r.repo.base + f.path, target: '_blank', rel: 'noopener', text: f.path }), i === 0 ? el('span', { class: 'faint', text: '  next' }) : null));
+      });
+      if (!r.list) files.appendChild(el('span', { class: 'faint', text: 'The tile publishes db/migrations.json on its next delivery.' }));
+      r.unlisted.forEach(function (m) { files.appendChild(el('div', { class: 'faint', text: m.name + ' ran but is not in the list' })); });
+      table.tBodies[0].appendChild(el('tr', null, el('td', null, el('strong', { text: r.repo.name }), ' ', el('span', { class: 'faint mono', text: r.repo.id })), el('td', null, state), files));
+    });
+    card.appendChild(el('div', { class: 'table-wrap' }, table));
+    host.appendChild(card);
+  }
+
   $('#audit-go').addEventListener('click', function () { loadAudit(true); });
   $('#audit-more').addEventListener('click', function () { loadAudit(false); });
 })();

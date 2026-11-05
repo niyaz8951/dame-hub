@@ -41,7 +41,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - Schemas: `core`, plus one per tile = tile id with `-` turned into `_` (`hvac-notes` -> `hvac_notes`). `public` holds only functions.
 - Browser calls: `public.core_<action>` and `public.<tile_id>_<action>` only. Rules for functions, rights, RLS and Storage: `docs/SECURITY.md` section 3.
 - Errors are plain codes pages can show: `SIGNED_OUT`, `NOT_APPROVED`, `NO_ACCESS`, `NO_RIGHT`, `NOT_FOUND`, `INVALID:<field>`.
-- **SQL files:** `db/<schema>/NNN_short_name.sql` in the repo that owns the schema, numbered, never edited after they ran on live (a fix is a new file). Each file ends with `select core.applied('<repo>', 'NNN_short_name');`. The owner reads and runs them in the SQL editor: staging, `core.security_check()`, test, then live.
+- **SQL files:** `db/<schema>/NNN_short_name.sql` in the repo that owns the schema, numbered, never edited after they ran on live (a fix is a new file). Each file ends with `select core.applied('<repo>', 'NNN_short_name');` and is listed in the repo's `db/migrations.json` (`docs/TILE-CONTRACT.md` section 4, "SQL list"); Admin > Health shows the owner which listed files have not run. The owner reads and runs them in the SQL editor: staging, `core.security_check()`, test, then live.
 - Types: `uuid` ids (`gen_random_uuid()`), `timestamptz`, `text` tile ids, `jsonb` only for genuinely free-form data.
 - Rows stay small; files, images and long tables go to the tile's private Storage bucket.
 
@@ -82,7 +82,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 Short, plain wording, no filler. Show a result rather than a list of questions; ask only when a wrong guess is costly. Logic beats literal wording: think it through, do it properly, say what was decided. Check engineering and logic even in material the owner supplies.
 
 ## 11. Handover to IT
-- Code: `dame-hub` and the tile repos, transferred as they are to an official GitHub account or organization (`docs/MOVE-ACCOUNT.md`). Data: Supabase organization `DAME`; IT is made owner. Neither depends on the other's account.
+- Code: `dame-hub` and the tile repos, transferred as they are to an official GitHub account or organization (`docs/MOVE-ACCOUNT.md`). Private repos, access-controlled Pages or another host: `docs/MOVE-ACCOUNT.md` section C (what each costs and changes). Data: Supabase organization `DAME`; IT is made owner. Neither depends on the other's account.
 - No secret in any repo. The Supabase URL and publishable key in `config.js` are public by design.
 - Company sign-in later: Supabase Auth supports company single sign-on (Pro); usernames map to company accounts without changing tiles.
 - A company domain later: pointed at the new account's Pages; the paths `/dame-hub/` and `/<tile-id>/` stay, so tiles do not change.

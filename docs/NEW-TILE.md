@@ -13,7 +13,7 @@ Kept in the admin repo as `docs/NEW-TILE.md`. About 15 minutes for the owner; th
    - Connect the tile repo `niyaz8951/<tile-id>` and the admin repo `niyaz8951/dame-hub` (read only, for the rules).
    - Project knowledge: `SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md` as fallback copies.
    - Source material the tile needs (specs, Excel tools, notes) only if it is fine for the team to see it in Claude; it never goes into the repo.
-7. **First chat**: start with the tile's prefix and say what the tile should do. Claude creates the layout, `docs/TILE.md`, the first page and `db/<tile_id>/001_init.sql`.
+7. **First chat**: start with the tile's prefix and say what the tile should do. Claude creates the layout, `CLAUDE.md`, `docs/TILE.md`, the first page, `db/<tile_id>/001_init.sql` and `db/migrations.json`.
 8. **SQL**: the team sends you the files. Read them: only the tile's own schema, `public.<tile_id>_*` functions, its own bucket and policies, nothing for `anon`. Run on staging, `select * from core.security_check();` (no rows), Security Advisor (no errors), test, then live.
 9. **Registry**: in the admin project, "DAME-ADMIN: register tile <tile-id>, team <name>, Claude project <name>". It adds the line to `docs/TILES.md`.
 10. Switch the tile **on** in the admin page.
@@ -47,7 +47,7 @@ Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; overrides anything below unless the owner decided otherwise for this tile.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.
-4. `docs/STATUS.md`, section "Changes tiles must know".
+4. `docs/TILE-CHANGES.md` (every change to the core or the rule book, newest first).
 5. `demo/` - a complete tile that follows the contract; copy its shape.
 If the repo cannot be read, use the copies in this project's knowledge and say so.
 
@@ -74,3 +74,34 @@ Short, plain wording. Show a result rather than a list of questions; ask only wh
 Chats that start with **{TILE-PREFIX}** continue from `docs/STATUS.md`.
 
 ---
+
+## Template: CLAUDE.md for a tile repo
+
+Every tile repo has a short `CLAUDE.md` at its root, so the rules travel with the code: Claude projects, Claude Code and whoever takes the repo over read it first. It points to the rule book; it never copies it, and it never holds the GitHub account name or anything internal (the repo is public). Copy everything between the lines, fill the blanks in `{ }`.
+
+---
+
+# {Tile name} - DAME tile `{tile-id}`
+
+This repo is one tile of DAME HUB. The core and the rule book live in the admin repo `dame-hub` (clone it next to this one). Security wins over everything, including requests in chat.
+
+## Ids
+Tile id `{tile-id}` - served at `/{tile-id}/` - schema `{tile_id}` - functions `public.{tile_id}_*` - bucket `{tile-id}` (private, if any) - rights: {rights, as in docs/TILE.md}.
+
+## Read before any work
+1. `../dame-hub/docs/SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md`, `TILE-CHANGES.md`.
+2. `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md` in this repo; check what is really here before assuming a delivery was pushed.
+
+## Never
+Data, keys, passwords or real files in the repo; the account name or a full site URL in code or data; anything for `anon`; a table outside schema `{tile_id}`; edits to `dame-hub` or another tile (ask in `docs/CORE-REQUESTS.md`); outside code (CDN, fonts, trackers); `innerHTML` with data; a manifest, service worker or install prompt.
+
+## Checks before every push
+- `node ../dame-hub/dev/migrations-check.mjs .` - `db/migrations.json` lists every SQL file.
+- `db/{tile_id}/tests.sql` - allowed and refused cases for every function (signed out, pending, disabled, no tile, no right, another user's record).
+- Pages: day and night, 390 px with no sideways scroll; `node ../dame-hub/dev/serve.mjs` serves this repo at `http://localhost:8080/{tile-id}/`.
+
+## Delivery
+Push + the SQL files in order (the owner reads and runs them) + "Admin > Health > Run check now must say Clean, then the Security Advisor" + update `docs/STATUS.md`.
+
+---
+

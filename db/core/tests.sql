@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 008). Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 010). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -171,6 +171,7 @@ begin
   perform pg_temp.expect_error('select public.core_tile_users(''t-tile'')', 'NO_RIGHT');
   perform pg_temp.expect_error('select public.core_admin_users()', 'NO_RIGHT');
   perform pg_temp.expect_error('select core.display_names(''t-tile'', ''{}''::uuid[])', 'PERMISSION'); -- not from the API role
+  perform pg_temp.expect_error('select core.tile_users(''t-tile'')', 'PERMISSION');
   reset role;
   -- display_names, as a tile function calls it: active and disabled named, pending and unknown ids left out
   select count(*) into n from core.display_names('t-tile', array[
@@ -181,6 +182,12 @@ begin
   if (select display_name from core.display_names('t-tile', array[(select id from t_ids where k = 't.admin')])) <> 'Test Tile Admin' then raise exception 'display_names name'; end if;
   perform pg_temp.expect_error('select core.display_names(''ghost'', ''{}''::uuid[])', 'NO_ACCESS');
   perform pg_temp.expect_error(format('select core.display_names(''t-tile'', %L::uuid[])', (select array_agg(gen_random_uuid()) from generate_series(1, 501))), 'INVALID:ids');
+  -- tile_users (009), as a tile function calls it: active users with the tile + super users; never pending, disabled or without the tile
+  select count(*) into n from core.tile_users('t-tile');
+  if n <> 3 then raise exception 'tile_users rows: %', n; end if;
+  if exists (select 1 from core.tile_users('t-tile') where username in ('t.pending', 't.disabled', 't.none')) then raise exception 'tile_users leaks'; end if;
+  if (select string_agg(username, ',' order by username) from core.tile_users('t-tile')) <> 't.admin,t.super,t.user' then raise exception 'tile_users names'; end if;
+  perform pg_temp.expect_error('select core.tile_users(''ghost'')', 'NO_ACCESS');
   if not core.has_tile((select id from t_ids where k = 't.user'), 't-tile') then raise exception 'has_tile'; end if;
   if not core.has_tile((select id from t_ids where k = 't.user'), 't-tile', 'edit') then raise exception 'has_tile edit'; end if;
   if core.has_tile((select id from t_ids where k = 't.user'), 't-tile', 'export') then raise exception 'has_tile export'; end if;
@@ -351,6 +358,36 @@ begin
     perform pg_temp.expect_error('select core.release_username(''t.mk3'')', 'NOT_FOUND');
     raise notice 'delete ok';
   end;
+
+  -- ---- health (010): super only; run now; a problem is stored and audited
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect_error('select public.core_admin_health()', 'PERMISSION');
+  perform pg_temp.expect_error('select public.core_admin_health_run()', 'PERMISSION');
+  perform pg_temp.act_as('t.user'); perform public.core_session_start();
+  perform pg_temp.expect_error('select public.core_admin_health()', 'NO_RIGHT');
+  perform pg_temp.expect_error('select public.core_admin_health_run()', 'NO_RIGHT');
+  perform pg_temp.expect_error('select core.run_health()', 'PERMISSION');
+  reset role;
+  perform pg_temp.act_as('t.pending'); perform public.core_session_start();
+  perform pg_temp.expect_error('select public.core_admin_health()', 'NOT_APPROVED');
+  reset role;
+  perform pg_temp.act_as('t.super'); perform public.core_session_start();
+  select public.core_admin_health_run() into v;
+  if (v -> 'last' ->> 'problems')::int <> 0 or v -> 'last' ->> 'source' <> 'admin' then raise exception 'health run: %', v -> 'last'; end if;
+  if not exists (select 1 from jsonb_array_elements(v -> 'applied') e where e ->> 'repo' = 'dame-hub' and e ->> 'name' = '010_health') then raise exception 'health applied list'; end if;
+  reset role;
+  if not exists (select 1 from core.audit where action = 'security_check_run') then raise exception 'health run audit'; end if;
+  create table core.t_norls (x int); -- a problem on purpose, rolled back with the rest
+  if core.run_health('nightly') < 1 then raise exception 'health missed a problem'; end if;
+  if not exists (select 1 from core.audit where action = 'security_check_problems' and detail ->> 'source' = 'nightly') then raise exception 'health problem audit'; end if;
+  perform pg_temp.expect_error('select core.run_health(''other'')', 'INVALID:source');
+  drop table core.t_norls;
+  perform pg_temp.act_as('t.super'); perform public.core_session_start();
+  select public.core_admin_health() into v;
+  if (v -> 'last' ->> 'problems')::int < 1 or (v ->> 'failed_runs_30d')::int < 1 then raise exception 'health last: %', v; end if;
+  if v -> 'last' -> 'detail' -> 0 ->> 'object' <> 'core.t_norls' then raise exception 'health detail: %', v -> 'last' -> 'detail'; end if;
+  reset role;
+  raise notice 'health ok';
 
   -- ---- applied() refuses a second run
   perform pg_temp.expect_error('select core.applied(''dame-hub'', ''001_init'')', 'ALREADY_APPLIED: dame-hub/001_init');

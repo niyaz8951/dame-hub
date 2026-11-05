@@ -11,7 +11,7 @@ Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; section 2 explains tiles kept inside the admin repo.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.
-4. `docs/STATUS.md`, section "Changes tiles must know".
+4. `docs/TILE-CHANGES.md` (every change to the core or the rule book, newest first; it replaces the old STATUS section "Changes tiles must know").
 
 Then read this tile's `tools/docs/TILE.md`, `tools/docs/STATUS.md`, `tools/docs/CORE-REQUESTS.md`, and check what is really in `tools/`.
 
