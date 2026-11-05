@@ -2,8 +2,8 @@
 
 ## What this project is
 The **Projects** tile of DAME, the internal team site at `https://niyaz8951.github.io/dame-hub/`.
-Tile id `projects` - repo `niyaz8951/projects` - address `https://niyaz8951.github.io/projects/` (served at `/projects/`) - schema `projects` - functions `public.projects_*` - private bucket `projects`.
-What it does: a register of the team's projects. Each project is opened from a list and holds, in time, its rule book and knowledge maps, a compliance review and product options. Everything a page shows is data and lives in Supabase.
+Tile id `projects` - repo `niyaz8951/projects` - address `https://niyaz8951.github.io/projects/` (served at `/projects/`) - schema `projects` - functions `public.projects_*` - private bucket `projects` (only if a step needs it).
+What it does: the team's **Projects tool, moved from Thinkneering** (`niyaz8951/Thinkneering`, `public/tools/projects` with the parts of `datasheet-notes`, `compliance-maker` and `product-options` it uses). A project holds the datasheets and specifications of one job: the datasheet PDF is read into a table of values per unit; the specification PDF is turned into clauses; under each clause that asks about a datasheet row the page shows the project's datasheet value (or, without a datasheet, what to select from the factory's approved Product Options); people answer the clauses, answers go to the factory's compliance library through review, and the compliance Excel files are downloaded. Mature, proven on real work: **it is moved feature for feature, as it is.**
 Team: owner (Niyaz) for now. Tile admin: owner.
 
 ## Directions come from the admin project
@@ -12,33 +12,47 @@ Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
 2. `docs/STANDARDS.md` - the rule book; overrides anything below unless the owner decided otherwise for this tile.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.
 4. `docs/STATUS.md`, section "Changes tiles must know".
-5. `demo/` - a complete tile that follows the contract; copy its shape.
+5. `demo/` - a complete tile that follows the contract; `tools/` - a tile whose pages were brought over from an older site (the pattern for this one).
 If the repo cannot be read, use the copies in this project's knowledge and say so.
 
 Then read this tile's `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md`, and check what is really in the repo.
 
+## The source: `niyaz8951/Thinkneering` (read it before step 1)
+- `docs/End-to-End-Walkthrough.md` - the whole flow, step by step, with the code behind each step. **This is the specification of the tile.**
+- `docs/Screen-Map.md` - every screen, its one job, primary action and empty state. Keep it.
+- `docs/Compliance-Process.md` - how a clause is answered (sections 1 and 2; the AI steps are out, see below).
+- Pages: `public/tools/projects/` (index, project, add-spec, record, compare, note, `pr-match.js`, `pr-options.js`, `pr-pick.js`, `pr-xlsx.js`), `public/tools/datasheet-notes/` (`ds-read.js`, `ds-parse.js`, `ds-fcu.js`, `datasheet-notes.js`, `ds-xlsx.js`), `public/tools/compliance-maker/` (`cm-engine.js`, `cm-rows.js`, `cm-focus.js`, `cm-highlight.js`, `xlsx-writer.js`, `library.html`, `cm-library.js`), `public/tools/product-options/` (`product-options.js`, `mapping.html`, `mapping.js`, `po-xlsx.js`), `public/assets/vendor/pdfjs/`.
+- Server: `worker/src/api/pr.ts`, `cm.ts`, `dn.ts`, `po.ts`, `worker/src/lib/project.ts`, `cm.ts`, `rows.ts`; `db/migrations/0001` to `0010` for the tables (`pr_*`, `cm_*`, `dn_*`, `po_*`, `app_counters`).
+
 ## Boundaries
 - Work only in `niyaz8951/projects`, schema `projects`, functions `public.projects_*`, bucket `projects`.
-- The repo is public, history included: no internal data, keys, passwords or real files in it. Real data lives only in Supabase. Staging examples are invented: no real project name, customer, site, price or factor, even as a sample.
+- The repo is public, history included: no internal data, keys, passwords or real files in it. Real data lives only in Supabase. Staging examples are invented: no real project name, customer, site, datasheet, specification or price, even as a sample.
 - Never change the admin repo, `core/v1`, the `core` schema, or another tile. A need from the core goes in `docs/CORE-REQUESTS.md`; work around it meanwhile.
-- Login, users, roles, theme and file access come only from the core, loaded from `/dame-hub/core/v1/`.
+- Login, users, roles, theme and file access come only from the core, loaded from `/dame-hub/core/v1/`. Thinkneering's `hub.js`, `api.js`, `config.js`, sign-in, users, tiles and audit are **not** brought over: `Core.requireLogin({ tile: 'projects' })`, `Core.rpc`, the core topbar and theme replace them. Project membership and "Can edit" of the old tool become tile rights declared in `docs/TILE.md` plus the tile's own membership table.
 - Never write the GitHub account name or a full site URL in code or data; use root-relative paths (`/dame-hub/...`, `/projects/...`), so the tile survives a move to another account.
-- No AI features for now. Nothing is imported from earlier sites unless the owner decided it for this tile (see Tile decisions).
+- **No AI.** The admin rule "no AI until the owner decides" holds. Left out: `ai_*` routes, Focus-mode proposals, the whole-specification AI review, AI rules, Check the AI, the vocabulary maps, AI notes in Product Options. Focus mode stays as the manual clause-by-clause pane (one clause, the six answers, Remarks, Next to fill). The pages lose their AI buttons, not their layout.
+- Nothing is imported from the old database (projects, records, datasheet tables, library answers, Product Options values start empty). Allowed as seeds, because they are configuration and hold no internal data: products, factories, client types, regions, the starter keywords and Remove text of the row mapping (`dn_starter_keywords`).
 - SQL files go to the owner, who reads and applies them. Never ask for or accept the Supabase secret key or database password.
 
 ## Tile decisions
-- 2026-11-04 - **Reference, not source.** The old tool `niyaz8951/Thinkneering`, folder `tools/projects`, is read **only to learn its features** (what a user could do, which fields and outputs mattered). Copy **no** code, data, library or layout from it. Rebuild everything to the DAME rules: core guard and topbar, theme tokens and the tile accent, `Core.el` / `textContent`, no inline scripts, no CDN or external map or font, functions behind `core.require_tile('projects', ...)`.
-- 2026-11-04 - **Scope, in this order; one step delivered and checked by the owner before the next starts:**
-  1. **Project register** - list, create, open a project.
-  2. **Maps** - the project's **rule book and knowledge maps** (structured maps of the rules, clauses and knowledge that govern a project, as the old tool had them), **not** geographic maps. Drawn with the tile's own code (SVG / HTML built with `Core.el`); the nodes and links are data in schema `projects`.
-  3. **Compliance review** inside a project.
-  4. **Product options** inside a project.
-- 2026-11-04 - **Data only in schema `projects` and bucket `projects`** of the one DAME database, never a separate Supabase project: one sign-in, rights, audit and `core.security_check()` only work inside one project, and the schema and bucket already isolate it. If the tile outgrows the Free limits, the path is Pro on the DAME project, not a second project.
-- 2026-11-05 - **Specification PDFs are not stored.** Only the clause text the user extracts or types is kept, as records in schema `projects` (clause reference, title, text, source document name and page as plain fields). The PDF itself stays on the user's device; reading it to pick clauses happens in the browser and nothing of the file is uploaded. Bucket `projects` stays reserved for later needs and is created only when a step needs it.
-- 2026-11-04 - Rights: declare them in `docs/TILE.md` as each step needs them (step 1 will need at least `edit` for create); the owner enters the same list in Admin > Tiles. Tile colour to be chosen by the owner later (blue until then). The tile stays **off** until step 1 is checked.
+- 2026-11-05 (owner) - **Move the tool as it is.** Features, screens, flows and outputs stay what `docs/End-to-End-Walkthrough.md` describes. The browser code (PDF readers, table parser, spec engine, clause-to-row matcher, Excel writers, pages) is brought over and adapted to the DAME core the way the Tools tile was: standard `<head>` and CSP, core guard and topbar, theme tokens and the tile accent, the old API calls replaced by `Core.rpc('projects_*')`. The server side (TypeScript Worker + D1) cannot run on Supabase and is **rewritten as Postgres functions** `public.projects_*` in schema `projects`, route for route (`pr_*`, `cm_*`, `dn_*`, `po_*`), each behind `core.require_tile('projects', <right>)`, with the same checks the old routes made. The earlier line "copy no code" is withdrawn.
+- 2026-11-05 (owner) - **This must remain exactly as it is:** after a datasheet is read and a specification is converted, every clause that asks about a datasheet row shows the datasheet value(s) under it (blue chips: `pr-match.js` + `cm-rows.js` matcher with the topic gate, one entry per row key, newest table per unit wins), and without a datasheet the dashed chips from the factory's **approved** Product Options (exact value, else the closest higher, never a lower one; "choose:" lists; "none seen meets it"). The row mapping (`dn_*`) that drives it, and the collection of values into Product Options at datasheet read (`po_collect`, grouped values, "to approve"), come with it. Keep one matcher in the browser; the server copy (`lib/rows.ts`) is only needed if a function has to match on the server (the selection list), then the two must agree.
+- 2026-11-05 (owner) - **Maps are not in this tile.** Rule books, knowledge maps and the vocabulary (`mp_*`, `public/tools/maps/`) go to a **separate tile later**, discussed once the compliance maker, the datasheet reading and Product Options are ready here. Nothing in this tile may depend on a map.
+- 2026-11-05 (owner) - **Specification PDFs are not stored.** As in the old tool, only the clauses are kept (`cm_runs` / `cm_run_lines` / `cm_lines` as tables in schema `projects`: Sr, Part, section, text, answers, remarks, internal comment). The PDF stays on the user's device and is read in the browser.
+- 2026-11-05 - **Datasheet PDFs are not stored either**; the table read from them is. The old tool kept it as JSON in R2 (`notes/<project>/<note>.json`): here keep it as `jsonb` in a table of schema `projects` (a table is small, and no bucket policies are needed); use bucket `projects` only if a later step needs real files.
+- 2026-11-05 - **Scope, in this order; one step delivered and checked by the owner before the next starts:**
+  1. **Project register** - list, new project (name, client type, client, region; code `P-<year>-NNNN` from a counter that never repeats), open; project page with the Next step card; members; history; `docs/TILE.md` with the rights.
+  2. **Datasheet notes** - Read a datasheet (AHU, FCU) into the project: `ds-read` / `ds-parse`, row keys, the row mapping with starter keywords, factory read from the datasheet, "read again replaces", Datasheet Notes view and Excel, `po_collect` into Product Options (to approve).
+  3. **Specification and record** - Add a specification (factory pre-selected from the datasheet, warning when it differs), `cm-engine` PDF/text to clauses, the record page (Read / Edit, show, find, counts, legend), **blue chips and dashed chips**, Focus mode without proposals, answers saved per project, compare page, the two Excel downloads (consultant and working, with the Datasheet rows / Selection list sheet), project Excel.
+  4. **Compliance review** - the factory library (`library.html`): clauses in reading order, project filter by code, users' answers, *Use this answer* / *Do not take*, Internal Comments, upload and download of the library, conversion history.
+  5. **Product Options** - tree per product and factory, approval (*Approve all*), groups, extras, hidden values, the row-mapping page (`mapping.html`), Excel.
+  Then: the Maps tile discussion (owner).
+- 2026-11-04 - Data only in schema `projects` (and bucket `projects` if needed) of the one DAME database, never a separate Supabase project: one sign-in, rights, audit and `core.security_check()` only work inside one project, and the schema already isolates it. If the tile outgrows the Free limits, the path is Pro on the DAME project, not a second project.
+- 2026-11-04 - Tile colour to be chosen by the owner later (blue until then). The tile stays **off** until step 1 is checked. Vendored pdf.js comes from the Thinkneering copy with its licence (no network calls; same as the Tools tile); the Excel writer is the tool's own, dependency-free.
+- Markup: the old pages build some markup with `innerHTML` from escaped values; keep every inserted value escaped and move a page to `Core.el` when it is reworked (same deviation as the Tools tile, recorded in `docs/TILE.md`). No inline scripts, no `style=""` attributes, colours only through theme tokens.
 
 ## Delivery
-Push (or zip) + the SQL files in order (`db/projects/NNN_*.sql`, each ending with `select core.applied('projects', 'NNN_name');`, plus `db/projects/tests.sql`) + the security-check step + update `docs/STATUS.md`. Say in the delivery what the owner should try on a laptop and a phone, day and night.
+Push (or zip) + the SQL files in order (`db/projects/NNN_*.sql`, each ending with `select core.applied('projects', 'NNN_name');`, plus `db/projects/tests.sql` with allowed and refused calls for every function) + the security-check step + update `docs/STATUS.md`. Say in the delivery what the owner should try with a real datasheet and specification (on staging, with invented or anonymised files), on a laptop and a phone, day and night.
 
 ## How to work with the owner and the team
 Short, plain wording. Show a result rather than a list of questions; ask only when a wrong guess is costly (data, permissions, security). Logic beats literal wording. Check engineering and logic, even in material supplied by the team.
