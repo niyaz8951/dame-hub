@@ -5,7 +5,7 @@ window.Core = (function () {
   var cfg = window.DAME_CONFIG;
   var Api = window.Api;
   var CORE = cfg.CORE;
-  var ICONS = ['tile', 'notes', 'chart', 'tools', 'users', 'folder', 'book', 'calc', 'gear', 'shield', 'wind', 'check'];
+  var ICONS = ['tile', 'notes', 'chart', 'tools', 'users', 'folder', 'book', 'calc', 'gear', 'shield', 'wind', 'check', 'map'];
   var ACCENTS = ['blue', 'teal', 'green', 'orange', 'violet', 'rose', 'slate'];
   var Core = { user: null, tile: null, CORE: CORE, ICONS: ICONS, ACCENTS: ACCENTS, SITE_NAME: cfg.SITE_NAME };
 

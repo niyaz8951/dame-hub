@@ -330,6 +330,7 @@ td.actions { white-space: nowrap; text-align: right; }
 .i-shield { --icon: url("/dame-hub/core/v1/icons/shield.svg"); }
 .i-wind { --icon: url("/dame-hub/core/v1/icons/wind.svg"); }
 .i-check { --icon: url("/dame-hub/core/v1/icons/check.svg"); }
+.i-map { --icon: url("/dame-hub/core/v1/icons/map.svg"); }
 :root { --icon-mark: url("/dame-hub/core/v1/icons/mark.svg"); --icon-sun: url("/dame-hub/core/v1/icons/sun.svg"); --icon-moon: url("/dame-hub/core/v1/icons/moon.svg");
   --icon-chevron: url("/dame-hub/core/v1/icons/chevron.svg"); --icon-arrow: url("/dame-hub/core/v1/icons/arrow.svg"); }
 

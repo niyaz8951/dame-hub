@@ -66,7 +66,7 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 | `Core.setTitle(text)`, `Core.param(name)`, `Core.go(path)` | Title, query parameter, navigation. |
 | `Core.signOut()` | Ends the session everywhere and goes to the sign-in page. |
 | `Core.install.ready()`, `Core.install.standalone()`, `Core.install.show()` | The installed app: whether the browser can install right now, whether the page already runs inside the app, and the "Install app" sheet (a tile never needs these; the account menu has the item). |
-| `Core.ICONS` | Icon names a tile may use: `tile notes chart tools users folder book calc gear shield wind check`. |
+| `Core.ICONS` | Icon names a tile may use: `tile notes chart tools users folder book calc gear shield wind check map`. |
 
 ## Api
 | Call | What it does |
