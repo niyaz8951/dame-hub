@@ -144,7 +144,7 @@ try {
   await expect((await page.textContent('#topbar')).includes('Demo'), 'topbar shows tile name');
   await shot(page, 'demo-super');
   // sign out from the menu
-  await page.click('#topbar .who'); await page.click('#topbar .menu-list button');
+  await page.click('#topbar .who'); await page.click('#topbar .menu-list button:has-text("Sign out")');
   await page.waitForURL('**/dame-hub/');
   await expect(await page.evaluate(() => localStorage.getItem('dame.session')) === null, 'session cleared on sign out');
   await page.context().close();
@@ -261,11 +261,68 @@ try {
   }
   // a user without the tile is refused
   page = await newPage();
-  await signIn(page, 'demo_pending', 'DemoPass2026');
+  await signIn(page, 'demo_pending', 'DemoPass2026'); await page.waitForURL('**/dashboard.html');
   await page.goto(B + '/dame-hub/tools/psychrometric-chart/');
-  await page.waitForSelector('main .state');
+  await page.waitForSelector('main .state', { state: 'visible' });
   await expect(!(await page.isVisible('#states-body')), 'tools page refuses a user without the tile');
   await page.context().close();
+
+  // 5. the installed app: manifest, service worker, offline page, Install item, standalone mode
+  log('installed app');
+  page = await newPage({ width: 390, height: 800 });
+  const man = await page.request.get(B + '/dame-hub/manifest.webmanifest');
+  await expect(man.ok() && /manifest\+json/.test(man.headers()['content-type'] || ''), 'manifest served as application/manifest+json');
+  const mj = await man.json();
+  await expect(mj.id === '/dame-hub/' && mj.scope === '/' && mj.start_url === '/dame-hub/dashboard.html' && mj.display === 'standalone', 'manifest id / scope / start_url / display');
+  await expect(mj.icons.some((i) => i.sizes === '192x192') && mj.icons.some((i) => i.sizes === '512x512'), 'manifest has 192 and 512 icons');
+  for (const i of mj.icons) { const r = await page.request.get(B + i.src); await expect(r.ok() && r.headers()['content-type'] === 'image/png', 'icon reachable ' + i.src); }
+  await expect((await page.request.get(B + '/dame-hub/sw.js')).ok(), 'sw.js served');
+  await expect((await page.request.get(B + '/dame-hub/offline.html')).ok(), 'offline.html served');
+  for (const p of ['/dame-hub/', '/dame-hub/dashboard.html', '/dame-hub/admin.html', '/dame-hub/account.html', '/dame-hub/access.html', '/dame-hub/404.html']) {
+    const html = await (await page.request.get(B + p)).text();
+    await expect(html.includes('rel="manifest" href="/dame-hub/manifest.webmanifest"') && html.includes('viewport-fit=cover') && html.includes('name="theme-color"'), 'head block complete on ' + p);
+  }
+  await signIn(page, 'demo_user', 'FinalPass2026');
+  await page.waitForURL('**/dashboard.html'); await page.waitForSelector('a.tile');
+  await page.waitForFunction(() => navigator.serviceWorker.controller || navigator.serviceWorker.getRegistration().then((r) => !!r), null, { timeout: 5000 }).catch(() => {});
+  await expect(await page.evaluate(() => navigator.serviceWorker.getRegistration('/dame-hub/').then((r) => !!r && r.scope.endsWith('/dame-hub/'))), 'service worker registered with scope /dame-hub/');
+  await page.click('#topbar .who');
+  await expect(await page.isVisible('.menu-list button:has-text("Install app")'), 'Install app in the account menu (browser tab)');
+  await page.click('.menu-list button:has-text("Install app")');
+  await page.waitForSelector('.sheet');
+  await expect((await page.textContent('.sheet')).includes('Install the app'), 'install sheet opens with steps');
+  await shot(page, 'install-sheet');
+  await page.click('.sheet .actions button.primary');
+  const tc = await page.getAttribute('meta[name="theme-color"]', 'content');
+  await expect(tc === '#F3F7FA', 'theme-color follows day (' + tc + ')');
+  await page.click('#theme-btn'); await page.waitForTimeout(700);
+  await expect((await page.getAttribute('meta[name="theme-color"]', 'content')) === '#061426', 'theme-color follows night');
+  await page.click('#theme-btn'); await page.waitForTimeout(700);
+  // offline: a core page navigation falls back to offline.html once the worker is active
+  await page.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 5000 }).catch(() => {});
+  if (await page.evaluate(() => !!navigator.serviceWorker.controller)) {
+    await page.context().setOffline(true);
+    await page.goto(B + '/dame-hub/account.html').catch(() => {});
+    await expect((await page.textContent('body')).includes('You are offline'), 'offline navigation shows offline.html');
+    await page.context().setOffline(false);
+  } else await expect(false, 'service worker did not take control in time');
+  await page.context().close();
+  // standalone mode (the installed app): no Install item, pages fit at 390px
+  const sctx = await browser.newContext({ viewport: { width: 390, height: 800 } });
+  await sctx.addInitScript(() => { const m = window.matchMedia; window.matchMedia = (q) => q === '(display-mode: standalone)' ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : m.call(window, q); });
+  page = await sctx.newPage();
+  page.on('pageerror', (e) => errors.push(step + ': pageerror ' + e.message));
+  await signIn(page, 'demo_user', 'FinalPass2026');
+  await page.waitForURL('**/dashboard.html'); await page.waitForSelector('a.tile');
+  await page.click('#topbar .who');
+  await expect(!(await page.isVisible('.menu-list button:has-text("Install app")')), 'no Install item inside the installed app');
+  for (const p of ['/dame-hub/dashboard.html', '/dame-hub/demo/', '/dame-hub/account.html']) {
+    await page.goto(B + p); await page.waitForFunction(() => !document.documentElement.hasAttribute('data-loading'));
+    const w = await page.evaluate(() => document.documentElement.scrollWidth);
+    await expect(w <= 390, 'standalone: no sideways scroll on ' + p + ' (' + w + ')');
+  }
+  await shot(page, 'standalone-dashboard');
+  await sctx.close();
 
   // 6. night mode screenshot
   page = await newPage();

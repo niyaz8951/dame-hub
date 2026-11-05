@@ -5,7 +5,8 @@ Load order in `<head>`, after the two meta lines:
 ```html
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="robots" content="noindex, nofollow">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F7FA">
 <link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
 <link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">
@@ -14,6 +15,8 @@ Load order in `<head>`, after the two meta lines:
 <script src="/dame-hub/core/v1/core.js" defer></script>
 <script src="/<tile-id>/assets/<prefix>-page.js" defer></script>
 ```
+
+`viewport-fit=cover` and `theme-color` (added 2026-11-05) make a tile page sit right inside the installed app: the core pads the topbar and the page for the phone's notch and home bar, and `core.js` keeps `theme-color` in step with day / night. A tile never adds `<link rel="manifest">`, a service worker, app icons or an install button: the one installed app is defined in `dame-hub` (`docs/STANDARDS.md` section 12) and every page under `/` opens inside it.
 
 Tiles allowed the YouTube player (`docs/SECURITY.md` section 4; today `hvac-notes`) use this line on pages that show videos, and the line above on every other page:
 
@@ -62,6 +65,7 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 | `Core.download(name, blob)` | Saves a file built in the browser. |
 | `Core.setTitle(text)`, `Core.param(name)`, `Core.go(path)` | Title, query parameter, navigation. |
 | `Core.signOut()` | Ends the session everywhere and goes to the sign-in page. |
+| `Core.install.ready()`, `Core.install.standalone()`, `Core.install.show()` | The installed app: whether the browser can install right now, whether the page already runs inside the app, and the "Install app" sheet (a tile never needs these; the account menu has the item). |
 | `Core.ICONS` | Icon names a tile may use: `tile notes chart tools users folder book calc gear shield wind check`. |
 
 ## Api

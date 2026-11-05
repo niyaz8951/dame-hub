@@ -49,7 +49,13 @@ window.Core = (function () {
     if (t === 'day') return false;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
+  // The browser's own bar (status bar in the installed app) follows the page background, day or night.
+  function themeColorSync() {
+    var m = $('meta[name="theme-color"]'); if (!m) return;
+    m.setAttribute('content', themeIsNight() ? '#061426' : '#F3F7FA');
+  }
   function themeSync() {
+    themeColorSync();
     var b = $('#theme-btn'); if (!b) return;
     var night = themeIsNight();
     b.setAttribute('data-night', String(night));
@@ -81,7 +87,7 @@ window.Core = (function () {
         { duration: 600, easing: 'cubic-bezier(.2,.8,.2,1)', pseudoElement: '::view-transition-new(root)' });
     }).catch(function () {});
   }
-  themeApply(themeGet());
+  themeApply(themeGet()); themeColorSync();
   // Following the device: re-sync the switch when the device changes mode.
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -204,6 +210,52 @@ window.Core = (function () {
     Core.go(CORE + '/?next=' + encodeURIComponent(here));
   }
 
+  // ---------- the installed app ----------
+  // One app for the whole site, defined by /dame-hub/manifest.webmanifest (scope /, start at the dashboard).
+  // The service worker only serves offline.html; it is registered from core pages (and the tiles kept inside the core repo).
+  var installEvent = null;
+  var Install = {};
+  Install.standalone = function () {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  };
+  Install.ready = function () { return !!installEvent; };
+  Install.ios = function () {
+    var ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  };
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvent = e; });
+  window.addEventListener('appinstalled', function () { installEvent = null; Core.toast('DAME HUB is installed', 'success'); });
+  if ('serviceWorker' in navigator && window.location.pathname.indexOf(CORE + '/') === 0) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register(CORE + '/sw.js', { scope: CORE + '/' }).catch(function () {});
+    });
+  }
+  function steps(items) {
+    return el('ol', { class: 'install-steps' }, items.map(function (t) { return el('li', { text: t }); }));
+  }
+  // The "Install app" sheet: the browser's own prompt where it offers one, otherwise plain steps for this device.
+  Install.show = function () {
+    if (installEvent) {
+      var ev = installEvent; installEvent = null;
+      ev.prompt();
+      return Promise.resolve(ev.userChoice).catch(function () {}).then(function () {});
+    }
+    var body = el('div', { class: 'stack' });
+    if (Install.ios()) {
+      body.appendChild(el('p', { text: 'On iPhone and iPad the app is added from Safari:' }));
+      body.appendChild(steps(['Open this page in Safari.', 'Tap Share (the square with an arrow) at the bottom.', 'Scroll down and tap "Add to Home Screen".', 'Tap "Add". DAME HUB appears on the home screen and opens like an app.']));
+      body.appendChild(el('p', { class: 'muted', text: 'In Chrome on iPhone: tap Share in the address bar, then "Add to Home Screen".' }));
+    } else if (/Android/i.test(navigator.userAgent || '')) {
+      body.appendChild(steps(['Open the browser menu (the three dots).', 'Tap "Install app" or "Add to Home screen".', 'Tap "Install". DAME HUB appears on the home screen and opens like an app.']));
+      body.appendChild(el('p', { class: 'muted', text: 'Chrome, Edge and Samsung Internet all offer this. If the menu shows nothing yet, reload the page once and try again.' }));
+    } else {
+      body.appendChild(steps(['In Chrome or Edge, click the install icon at the right end of the address bar.', 'Or open the browser menu and choose "Install DAME HUB" (Chrome: "Cast, save and share" > "Install page as app").', 'Confirm. DAME HUB opens in its own window and sits in the Start menu or Dock.']));
+      body.appendChild(el('p', { class: 'muted', text: 'Safari on Mac: File > Add to Dock. Firefox does not install web apps.' }));
+    }
+    return Core.sheet({ title: 'Install the app', body: body, actions: [{ label: 'Done', kind: 'primary', value: true }] });
+  };
+  Core.install = Install;
+
   // ---------- topbar ----------
   function buildTopbar(me) {
     var bar = $('#topbar');
@@ -241,6 +293,7 @@ window.Core = (function () {
       if (Core.tile && (me.tile_admin || me.is_super)) list.appendChild(el('a', { href: CORE + '/access.html?tile=' + encodeURIComponent(Core.tile.id), text: 'Access to ' + Core.tile.name }));
       if (me.is_super) list.appendChild(el('a', { href: CORE + '/admin.html', text: 'Admin' }));
       list.appendChild(el('a', { href: CORE + '/account.html', text: 'Account' }));
+      if (!Install.standalone()) list.appendChild(el('button', { type: 'button', text: 'Install app', on: { click: function () { Install.show(); } } }));
       list.appendChild(el('div', { class: 'sep' }));
       list.appendChild(el('button', { type: 'button', text: 'Sign out', on: { click: function () { Core.signOut(); } } }));
       var closeMenu = function () { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); };

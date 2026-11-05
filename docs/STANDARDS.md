@@ -87,3 +87,11 @@ Short, plain wording, no filler. Show a result rather than a list of questions; 
 - Company sign-in later: Supabase Auth supports company single sign-on (Pro); usernames map to company accounts without changing tiles.
 - A company domain later: pointed at the new account's Pages; the paths `/dame-hub/` and `/<tile-id>/` stay, so tiles do not change.
 - Export: database backup (Pro: daily; Free: `pg_dump` with the connection string) plus Storage buckets; the repos are the code. `docs/RUNBOOK.md` has the commands.
+
+## 12. The installed app
+- **One app for the whole site**, defined only in `dame-hub`: `/dame-hub/manifest.webmanifest` (`id` `/dame-hub/`, `scope` `/`, `start_url` the dashboard, `display` `standalone`, icons `core/v1/icons/icon-192.png` and `icon-512.png`, `background_color` `#F3F7FA`, `theme_color` `#0097E0`), `/dame-hub/sw.js`, `/dame-hub/offline.html`. Every core page links the manifest.
+- **Tiles never install on their own.** A tile has no manifest, no service worker, no app icons and no install prompt. Because the scope is `/`, every tile page opens inside the app once it is installed; a tile only needs the standard head block from `core/v1/README.md` (`viewport-fit=cover` and `theme-color`), so its page sits right under the notch and above the home bar.
+- **The service worker serves `offline.html` and nothing else.** It handles same-origin page navigations (network, or the offline page) and keeps only that page's own files; it never caches a page with data in it, never touches a Supabase request, never stores anything internal. Its scope is `/dame-hub/` (GitHub Pages cannot widen it); offline, a sibling tile shows the browser's own error, which is acceptable because DAME is online only.
+- **Install app** is in the account menu, hidden once the page already runs inside the app. On Chrome and Edge it opens the browser's own prompt; elsewhere a sheet with the steps for the device (iPhone and iPad: Safari > Share > Add to Home Screen).
+- `theme-color` follows the page background, day or night (`core.js` updates the meta); the topbar, `main`, sheets and toasts pad for the safe areas.
+- Team instructions: `docs/RUNBOOK.md`, "Install the app". Checked on a real phone whenever an app file changes.

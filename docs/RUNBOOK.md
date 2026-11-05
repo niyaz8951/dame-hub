@@ -57,6 +57,13 @@ Admin page > Users > Disable. GitHub: remove him as collaborator from his tile r
 2. Run `db/core/001_init.sql`, `seed-staging.sql`, every tile's SQL; security check.
 3. `core/v1/config.js`: `STAGING = { url, key }`; add the staging URL to `img-src` and `connect-src` in the CSP line of every page (core and tiles) and in `core/v1/README.md`; announce it in `docs/STATUS.md` under "Changes tiles must know".
 
+## Install the app (team instructions)
+One app for the whole site; tiles open inside it. Sign in first, then in the account menu (top right) tap **Install app**.
+- **Android** (Chrome, Edge, Samsung Internet): the browser's own prompt opens; tap **Install**. If nothing opens, browser menu (three dots) > **Install app** / **Add to Home screen**.
+- **iPhone, iPad**: Safari > **Share** (square with arrow) > **Add to Home Screen** > **Add**. Chrome on iPhone: Share in the address bar > Add to Home Screen.
+- **Laptop** (Chrome, Edge): the install icon at the right end of the address bar, or menu > **Install DAME HUB**. Safari on Mac: File > Add to Dock. Firefox does not install web apps.
+The app is a window on the live site: nothing is kept on the device, and signing out in the app signs out everywhere. "Can't be installed" means the manifest did not load: open `https://<account>.github.io/dame-hub/manifest.webmanifest` in the browser; it must show JSON, and Pages must be live.
+
 ## Export (backup)
 - Database: Supabase > Database > Backups (Pro: daily). Free: from any machine with `pg_dump`, using the connection string from the dashboard (database password from your password manager, never in a file):
   `pg_dump "<connection string>" --schema=core --schema=<each tile schema> --no-owner --no-privileges -F c -f dame-$(date +%F).dump`

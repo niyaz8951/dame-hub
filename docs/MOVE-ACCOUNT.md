@@ -15,6 +15,7 @@ Keep this list complete; the admin project adds to it if anything new ever needs
 2. Docs in `dame-hub/docs/**/*.md` (including the tile project instructions in `docs/tiles/`), `dame-hub/README.md`, `dame-hub/demo/docs/*.md`, `dame-hub/tools/docs/*.md` and every tile's `docs/*.md` and README (text only).
 3. Each Claude project's instructions and its GitHub connection.
 4. Collaborators on each tile repo (people, not text).
+5. Not the name, but the address: the installed app is tied to `https://<account>.github.io`. After a move every user installs the app again from the new address (`docs/RUNBOOK.md`, "Install the app") and removes the old icon; the manifest itself holds only root-relative paths and changes nothing.
 
 ## Steps
 

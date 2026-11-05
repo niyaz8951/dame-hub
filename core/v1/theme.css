@@ -392,6 +392,15 @@ html.theme-fade, html.theme-fade * { transition: background-color .35s var(--eas
   th, td { padding: 8px 10px; }
 }
 
+/* ---- the installed app: safe areas (notch, home bar) and the install sheet ---- */
+#topbar { padding-top: env(safe-area-inset-top, 0px); height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)); }
+#topbar .inner { padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
+main, .page { padding-bottom: calc(var(--space-7) + env(safe-area-inset-bottom, 0px)); padding-left: max(var(--space-4), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-4), env(safe-area-inset-right, 0px)); }
+.sheet { padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px)); }
+#toasts { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+.install-steps { margin: 0 0 var(--space-3); padding-left: 1.3em; }
+.install-steps li { margin: 6px 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
 }
