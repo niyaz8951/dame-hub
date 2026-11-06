@@ -9,6 +9,7 @@ No source repo: Supabase is the only home of the content. The old site's repo `n
 
 ## Directions come from the admin project
 Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
+0. `docs/FOUNDATIONS.md` - what every tile depends on and what is still open. Anything site-wide you notice (or that this tile is about to invent for itself) goes in the **first reply**, then in `docs/CORE-REQUESTS.md`.
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; overrides anything below unless the owner decided otherwise for this tile.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.

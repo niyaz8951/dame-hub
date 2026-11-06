@@ -63,6 +63,7 @@ Team: {team name}.
 
 ## Directions come from the admin project
 Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
+0. `docs/FOUNDATIONS.md` - what every tile depends on and what is still open. Anything site-wide you notice (or that this tile is about to invent for itself) goes in the **first reply**, then in `docs/CORE-REQUESTS.md`.
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; overrides anything below unless the owner decided otherwise for this tile.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.
@@ -108,7 +109,7 @@ This repo is one tile of DAME HUB. The core and the rule book live in the admin 
 Tile id `{tile-id}` - served at `/{tile-id}/` - schema `{tile_id}` - functions `public.{tile_id}_*` - bucket `{tile-id}` (private, if any) - containers: {kind(s)} - aliases / special rights: {as in docs/TILE.md, Who can do what}.
 
 ## Read before any work
-1. `../dame-hub/docs/SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md`, `TILE-CHANGES.md`.
+1. `../dame-hub/docs/FOUNDATIONS.md` (raise anything site-wide in the first reply), `SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md`, `TILE-CHANGES.md`.
 2. `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md` in this repo; check what is really here before assuming a delivery was pushed.
 
 ## Never

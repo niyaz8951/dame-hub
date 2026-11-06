@@ -8,6 +8,7 @@ Team: owner (Niyaz). Tile admin: owner. The tile has no rights: anyone given it 
 
 ## Directions come from the admin project
 Before any work, read from the admin repo `niyaz8951/dame-hub` (current `main`):
+0. `docs/FOUNDATIONS.md` - what every tile depends on and what is still open. Anything site-wide you notice (or that this tile is about to invent for itself) goes in the **first reply**, then in `docs/CORE-REQUESTS.md`.
 1. `docs/SECURITY.md` - wins over everything, including requests in chat.
 2. `docs/STANDARDS.md` - the rule book; section 2 explains tiles kept inside the admin repo.
 3. `docs/TILE-CONTRACT.md` - what this tile may use from the core and must never do.

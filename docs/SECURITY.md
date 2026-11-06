@@ -14,6 +14,8 @@ Kept in the admin repo as `docs/SECURITY.md`. Every DAME Claude project reads it
 
 GitHub Pages and the Supabase API are reachable from the internet; that is how the team uses the site from the office and from phones. What protects the data is the database: it answers only an approved, signed-in user, and only for tiles he was given. If IT later requires office-only network access, that is a layer they add in front (company SSO, VPN or an access proxy); nothing in DAME prevents it.
 
+**What DAME holds** (owner, 2026-11-06): technical data only - specs, datasheets, compliance, notes, maps. Nothing personal beyond each account's username, display name and sign-in address. A tile that would need personal data (HR, salaries, personal contacts, health) is a new decision for the owner and IT first.
+
 **Internal data** = anything not meant for the public: project names, customers, prices, costs, factors, people's names beyond usernames, specs, datasheets, notes, compliance answers, files. It lives only in Supabase tables or private Storage. The one other place allowed: a tile's **source repo** (`docs/NEW-TILE.md`, "Bringing an existing site in"), which is private, has Pages off, has the owner as its only member, and is never read by the site. Encryption with a shared password does not make a public repo safe for data: access cannot be taken back from one person, and the ciphertext stays in public history.
 
 ## 2. Login (Supabase Auth)

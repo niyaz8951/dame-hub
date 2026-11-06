@@ -30,14 +30,15 @@ Admin > Health > SQL files shows this live from the database and each repo's `db
 | `db/core/008_manage_users.sql` | applied (owner, 2026-11-05) |
 | `db/core/009_tile_users.sql` | applied 2026-11-05 |
 | `db/core/010_health.sql` | applied 2026-11-05 |
-| `db/core/011_access.sql` | **to apply** (2026-11-06) |
+| `db/core/011_access.sql` | applied 2026-11-06 |
 | `demo/db/demo/001_init.sql`, `002_access.sql` | - (demo not registered on live) |
 | `db/core/seed-staging.sql` | - (optional, demo accounts) |
 
 **Fresh project (staging), in this order:** `001_init`, `004_email_signin`, `005_owner_users`, `006_display_names`, `007_tile_accent`, `008_manage_users`, `009_tile_users`, `010_health`, `011_access`, `demo/db/demo/001_init.sql`, `002_access.sql`, every tile's files in the order of its `db/migrations.json`, then `seed-staging.sql`. `002` and `003` are skipped on a fresh project (marked `superseded`): `004` replaces the same trigger and nothing depends on them.
 
 ## Next
-1. **Owner, now: apply `db/core/011_access.sql`** (Admin > Health lists it; read it first). Then Admin > Health > **Run check now** must say Clean (the two pg_cron policies no longer show), then the Supabase Security Advisor. Then: Admin > Tiles shows Projects, HVAC Notes, Maps as *Declared*; open each **Access** and check every person's level is what you expect (011 set them from the old rights). Make the **groups** you want (Admin > Groups) and give them levels there. No tile changes anything the day 011 runs.
+**Site-wide needs and their order: `docs/FOUNDATIONS.md`** (read first in every chat; F10-F23 open).
+1. **011 applied on live** (2026-11-06 15:58 Dubai). Owner: Admin > Health > **Run check now** (must say Clean; the two pg_cron policies no longer show), Security Advisor; Admin > Tiles > each tile's **Access**: check every level (011 set them from the old rights); make the **groups** (Admin > Groups).
 2. **Tiles move to the model, one at a time, in their own chats** (plan per tile in `docs/TILE-CHANGES.md`, 2026-11-06): `hvac-notes` (notebooks as containers, levels for publish / approve), then `maps` (maps as containers; managers see private maps), then `projects` (projects as containers, members into shares, owners share their own). Each is one SQL file + pages; the admin project answers their core requests.
 3. **Owner, first (still open): the HVAC Notes backup.** Old `HVAC` repo: if deleted without its zip, the tile's export (HVAC Notes > Publish > *Download all pages*) is the only copy outside Supabase; keep one off this computer, then tell the admin project the date `HVAC` went (Phase 3 step 9).
 4. **Tiles, next delivery** (from 2026-11-05): `maps` adds `db/migrations.json` + `CLAUDE.md` if not yet there; `hvac-notes` `publish.html` and the four `tools/` tool pages take the `theme-color` head line; `projects` moves its `core.tile_users` request to Done.
