@@ -14,8 +14,19 @@ Four everyday engineering tools, each running entirely in the browser: the files
 
 Brought over as they were from `QuickTools` (parts extractor) and `Thinkneering` (the other three) on 2026-11-04, at the owner's request. Only the page head, the paths and the colour tokens changed.
 
-## Rights
-None. Anyone given the tile may use every tool.
+## Who can do what (core 011)
+Container kind: none - the tile stores nothing, so there is nothing to share.
+| Level | In this tile |
+|---|---|
+| read | use every tool (nothing is stored) |
+| contribute | not used |
+| edit | not used |
+| approve | not used |
+| manage | tile access (core rule); no settings |
+Aliases: none.
+Special rights: none.
+Functions: none. Pages: `Core.requireLogin({ tile: 'tools' })` on every page = read (anyone given the tile).
+Declaration: written by the core in `db/core/011_access.sql` (`levels: { read }`, `default: 'read'`). The tile has no SQL of its own, so that declaration stands; a tile SQL file would only be needed to change it.
 
 ## Data
 - None in Supabase.
@@ -34,6 +45,8 @@ tools/
 ```
 
 ## Decisions
+- One access level, read (core access model 011, 2026-11-06): no containers, no aliases, no special rights. The declaration lives in the core's 011 because the tile has no SQL.
+- Foundations (`docs/FOUNDATIONS.md`, 2026-11-06): nothing waits for anyone (no F14 function); nothing to index for search (F19); no data to export or keep, so retiring the tile is removing the folder (F20); no history (F21). The browser-side downloads (xlsx, pdf, png, csv) are tool results, not tile data.
 - Lives in `dame-hub/tools/` (owner, 2026-11-04): no separate repo. The core lists it in `INSIDE_CORE`, so the dashboard opens `/dame-hub/tools/`. The dev tooling that used to be in `tools/` moved to `dev/`.
 - The tool pages keep their own layout (`tl-legacy.css` + each tool's `styles.css`) under the core topbar; the tile accent drives their primary colour. Chart series colours (`--chart-1..8`) are theme tokens set in `psychrometric-chart/styles.css`.
 - The tools build markup with `innerHTML` from values they escape (`TN.esc`, `escapeHtml`); no database data is involved, and the CSP forbids inline scripts and style attributes. Accepted for this tile; new tools use `Core.el`.
