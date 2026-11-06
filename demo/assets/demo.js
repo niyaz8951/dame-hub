@@ -5,13 +5,14 @@
   var TILE = 'demo';
 
   Core.requireLogin({ tile: TILE }).then(function (me) {
-    var canEdit = me.is_super || me.rights.indexOf('edit') >= 0;
+    var canEdit = Core.atLeast('contribute');
+    var isManager = Core.atLeast('manage');
 
     // facts
     var facts = $('#facts');
     [['username', me.username], ['display name', me.display_name], ['super user', String(me.is_super)],
-     ['tile admin', String(me.tile_admin)], ['rights here', me.rights.length ? me.rights.join(', ') : '(none)'],
-     ['tile rights declared', me.tile.rights.join(', ') || '(none)']].forEach(function (f) {
+     ['level here', Core.LEVEL_NAMES[me.level] + ' - ' + Core.levelMeaning(me.level)], ['tile manager', String(me.tile_admin)],
+     ['names held', me.rights.length ? me.rights.join(', ') : '(none)']].forEach(function (f) {
       facts.appendChild(el('dt', { text: f[0] })); facts.appendChild(el('dd', { text: f[1] }));
     });
 
@@ -26,16 +27,23 @@
         Core.clear(host);
         if (!rows.length) { host.appendChild(el('p', { class: 'state', text: 'No notes yet.' })); return; }
         rows.forEach(function (n) {
-          var item = el('div', { class: 'demo-note' },
+          var a = n.access || {};
+          var who = a.everyone === 'edit' ? 'Everyone' : a.everyone === 'read' ? 'Everyone can view' : a.shared ? 'Shared with ' + a.shared : 'Only the owner';
+          var item = el('div', { class: 'demo-note', dataset: { id: n.id } },
             el('div', { class: 'row between' }, el('strong', { text: n.title }),
-              n.mine && canEdit ? el('button', { class: 'btn small ghost danger', type: 'button', text: 'Delete', on: { click: function (e) { var btn = e.currentTarget;
-                Core.confirm('Delete "' + n.title + '"?', { ok: 'Delete', danger: true }).then(function (yes) {
-                  if (!yes) return;
-                  Core.busy(btn, function () { return Api.rpc('demo_delete', { p_id: n.id }); }).then(loadNotes).catch(Core.showError);
-                });
-              } } }) : null),
+              el('div', { class: 'row' },
+                el('span', { class: 'badge', text: who }),
+                n.mine || isManager ? el('button', { class: 'btn small', type: 'button', text: 'Share', on: { click: function () {
+                  Core.share({ kind: 'note', id: n.id }).then(function (changed) { if (changed) loadNotes(); });
+                } } }) : null,
+                n.mine && canEdit ? el('button', { class: 'btn small ghost danger', type: 'button', text: 'Delete', on: { click: function (e) { var btn = e.currentTarget;
+                  Core.confirm('Delete "' + n.title + '"?', { ok: 'Delete', danger: true }).then(function (yes) {
+                    if (!yes) return;
+                    Core.busy(btn, function () { return Api.rpc('demo_delete', { p_id: n.id }); }).then(loadNotes).catch(Core.showError);
+                  });
+                } } }) : null)),
             n.body ? el('div', { class: 'text', text: n.body }) : null,
-            el('div', { class: 'meta', text: '@' + n.username + ' - ' + Core.dateTime(n.created_at) }));
+            el('div', { class: 'meta', text: '@' + n.username + ' - ' + Core.dateTime(n.created_at) + ' - you: ' + Core.LEVEL_NAMES[a.level] }));
           host.appendChild(item);
         });
       }).catch(function (err) { Core.clear(host); host.appendChild(el('p', { class: 'notice danger', text: Api.errorMessage(err) })); });

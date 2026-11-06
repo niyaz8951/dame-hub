@@ -7,7 +7,14 @@ window.Core = (function () {
   var CORE = cfg.CORE;
   var ICONS = ['tile', 'notes', 'chart', 'tools', 'users', 'folder', 'book', 'calc', 'gear', 'shield', 'wind', 'check', 'map'];
   var ACCENTS = ['blue', 'teal', 'green', 'orange', 'violet', 'rose', 'slate'];
-  var Core = { user: null, tile: null, CORE: CORE, ICONS: ICONS, ACCENTS: ACCENTS, SITE_NAME: cfg.SITE_NAME };
+  // Access levels, the same five in every tile (docs/TILE-CONTRACT.md section 5). Each includes the ones before it.
+  var LEVELS = ['read', 'contribute', 'edit', 'approve', 'manage'];
+  var LEVEL_NAMES = { read: 'Read', contribute: 'Contribute', edit: 'Edit', approve: 'Approve', manage: 'Manage' };
+  var LEVEL_HINTS = { read: 'Open and read what is shared with him', contribute: 'Create his own items, comment, reply',
+    edit: 'Change others\' work where it is shared to edit', approve: 'Approve, verify, send back, remove others\' content',
+    manage: 'People and access of the tile, every item, settings' };
+  var Core = { user: null, tile: null, CORE: CORE, ICONS: ICONS, ACCENTS: ACCENTS, SITE_NAME: cfg.SITE_NAME,
+    LEVELS: LEVELS, LEVEL_NAMES: LEVEL_NAMES, LEVEL_HINTS: LEVEL_HINTS };
 
   // ---------- DOM ----------
   function el(tag, attrs) {
@@ -140,6 +147,39 @@ window.Core = (function () {
   // Where a tile opens: /<id>/ for a sibling repo, /dame-hub/<id>/ for a tile kept inside the admin repo (config INSIDE_CORE).
   Core.tilePath = function (id) { return ((cfg.INSIDE_CORE || []).indexOf(id) >= 0 ? CORE : '') + '/' + id + '/'; };
   Core.safeNext = function (p) { return p && /^\/[a-z0-9][a-z0-9-]*\/[^\s]*$/i.test(p) && p.indexOf('//') !== 0 ? p : CORE + '/dashboard.html'; };
+
+  // ---------- access levels (for showing and hiding only: the database decides) ----------
+  Core.levelRank = function (level) { return LEVELS.indexOf(level) + 1; };
+  // True when the signed-in user has at least this level in the current tile.
+  Core.atLeast = function (level) {
+    var me = Core.user;
+    if (!me) return false;
+    if (me.is_super) return true;
+    return Core.levelRank(me.level) >= Core.levelRank(level);
+  };
+  // What a level means in the current tile (its declaration), else the general meaning.
+  Core.levelMeaning = function (level, tileLevels) {
+    var own = tileLevels || (Core.tile && Core.tile.levels) || {};
+    return own[level] || LEVEL_HINTS[level] || '';
+  };
+  // The Access panel of a container (a project, a map ...): Core.share({ kind, id, tile? }) -> Promise(changed).
+  // Loaded on first use, so tile pages need no extra script line.
+  var shareLoad = null;
+  Core.share = function (opts) {
+    opts = opts || {};
+    if (!opts.tile && Core.tile) opts.tile = Core.tile.id;
+    if (!shareLoad) {
+      shareLoad = new Promise(function (resolve, reject) {
+        if (window.CoreShare) { resolve(); return; }
+        var sc = document.createElement('script');
+        sc.src = CORE + '/core/v1/share.js'; sc.onload = function () { resolve(); };
+        sc.onerror = function () { shareLoad = null; reject(new Error('share.js')); };
+        document.head.appendChild(sc);
+      });
+    }
+    return shareLoad.then(function () { return window.CoreShare.open(opts); },
+      function () { Core.toast('Cannot open Access. Check the connection and try again.', 'danger'); return false; });
+  };
 
   // ---------- toast ----------
   Core.toast = function (text, kind) {
@@ -308,7 +348,7 @@ window.Core = (function () {
   Core.buildTopbar = buildTopbar;
 
   // ---------- the guard ----------
-  // opts: { tile: 'id', right: 'edit', super: true, page: 'Name' }
+  // opts: { tile: 'id', right: 'edit' | level: 'approve', super: true, page: 'Name' }
   Core.requireLogin = function (opts) {
     opts = opts || {};
     Core.pageName = opts.page || null;
@@ -327,7 +367,10 @@ window.Core = (function () {
       var onAccount = /\/account\.html$/.test(window.location.pathname);
       if (me.must_change_password && !onAccount) { Core.go(CORE + '/account.html?change=1'); return new Promise(function () {}); }
       if (opts.super && !me.is_super) { showState('Nothing here', 'There is nothing here for you.', { href: CORE + '/dashboard.html', label: 'Dashboard' }); return new Promise(function () {}); }
-      if (opts.right && !me.is_super && (me.rights || []).indexOf(opts.right) < 0) {
+      if (opts.right && !me.is_super && (me.rights || []).indexOf(opts.right) < 0 && (me.levels || []).indexOf(opts.right) < 0) {
+        showState('Nothing here', 'There is nothing here for you.', { href: CORE + '/dashboard.html', label: 'Dashboard' }); return new Promise(function () {});
+      }
+      if (opts.level && !me.is_super && Core.levelRank(me.level) < Core.levelRank(opts.level)) {
         showState('Nothing here', 'There is nothing here for you.', { href: CORE + '/dashboard.html', label: 'Dashboard' }); return new Promise(function () {});
       }
       document.documentElement.removeAttribute('data-loading');

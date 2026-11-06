@@ -18,11 +18,15 @@ window.Api = (function () {
     TAKEN: 'That email address is already registered. Sign in instead.',
     TAKEN_USERNAME: 'That username is taken, or belonged to another account.',
     IN_USE: 'A tile still ties records to this account, so it cannot be deleted. Disable it instead.',
+    IN_USE_CONTAINERS: 'This account still owns items in tiles. Hand them over first (Check access), then delete.',
+    TAKEN_GROUP: 'A group with that name exists already.',
     WEAK_PASSWORD: 'Password: at least 10 characters with lower case, upper case and a digit.',
     UNKNOWN: 'Something went wrong. Try again.'
   };
   var FIELDS = { username: 'username', password: 'password', display_name: 'display name', title: 'title', body: 'text',
-    id: 'id', name: 'name', tagline: 'tagline', icon: 'icon', rights: 'rights', user: 'user', status: 'status' };
+    id: 'id', name: 'name', tagline: 'tagline', icon: 'icon', rights: 'rights', user: 'user', status: 'status',
+    level: 'level', everyone: 'choice of who can open it', shares: 'people and groups', group: 'group', note: 'note',
+    confirm: 'name typed to confirm', type: 'kind of entry', kind: 'kind', users: 'members' };
 
   function ApiError(code, message, status, raw) {
     this.code = code; this.message = message; this.status = status || 0; this.raw = raw;
@@ -153,6 +157,8 @@ window.Api = (function () {
     if (/^(SIGNED_OUT|NOT_APPROVED|NO_ACCESS|NO_RIGHT|NOT_FOUND|INVALID:[a-z_]+)$/.test(msg)) return new ApiError(msg, messageFor(msg), status, body);
     if (msg === 'TAKEN:username') return new ApiError('TAKEN:username', MESSAGES.TAKEN_USERNAME, status, body);
     if (msg === 'IN_USE:user') return new ApiError('IN_USE', MESSAGES.IN_USE, status, body);
+    if (msg === 'IN_USE:containers') return new ApiError('IN_USE:containers', MESSAGES.IN_USE_CONTAINERS, status, body);
+    if (msg === 'TAKEN:group') return new ApiError('TAKEN:group', MESSAGES.TAKEN_GROUP, status, body);
     var m = /ALREADY_APPLIED|INVALID:[a-z_]+/.exec(msg);
     if (m) return new ApiError(m[0], messageFor(m[0]), status, body);
     if (status === 401) return new ApiError('SIGNED_OUT', MESSAGES.SIGNED_OUT, status, body);

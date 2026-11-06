@@ -26,6 +26,7 @@
   <div class="tabs" role="tablist">
     <button type="button" role="tab" aria-selected="true" data-tab="requests">Requests<span class="badge warning count" id="count-requests" hidden></span></button>
     <button type="button" role="tab" aria-selected="false" data-tab="users">Users</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="groups">Groups</button>
     <button type="button" role="tab" aria-selected="false" data-tab="tiles">Tiles</button>
     <button type="button" role="tab" aria-selected="false" data-tab="audit">Audit</button>
     <button type="button" role="tab" aria-selected="false" data-tab="health">Health<span class="badge danger count" id="count-health" hidden></span></button>
@@ -43,9 +44,17 @@
     <div id="users" class="table-wrap"></div>
   </section>
 
+  <section id="tab-groups" hidden>
+    <div class="row between">
+      <p class="muted grow">Groups of people (a team, a region). Give a group a level on a tile in Tiles &gt; Access; share a project or a map with a group from its Access panel. Members keep their own access too.</p>
+      <button class="btn primary" type="button" id="group-new">New group</button>
+    </div>
+    <div id="groups" class="stack"></div>
+  </section>
+
   <section id="tab-tiles" hidden>
     <div class="row between">
-      <p class="muted grow">A tile is a sibling repo served at <code>/&lt;tile-id&gt;/</code>. Register it here, then give access to users; it stays hidden until switched on.</p>
+      <p class="muted grow">A tile is a sibling repo served at <code>/&lt;tile-id&gt;/</code>. Register it here, then give people and groups a level in Access; it stays hidden until switched on.</p>
       <button class="btn primary" type="button" id="tile-new">New tile</button>
     </div>
     <div id="tiles" class="table-wrap"></div>

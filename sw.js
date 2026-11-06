@@ -4,7 +4,7 @@
    straight to the network). Scope: /dame-hub/ (a tile at /<tile-id>/ opens inside the app but, offline, shows
    the browser's own error). Bump VERSION when offline.html, theme.css or the icons change. */
 'use strict';
-var VERSION = 'dame-shell-v2';
+var VERSION = 'dame-shell-v3';
 var CORE = '/dame-hub';
 var SHELL = [CORE + '/offline.html', CORE + '/core/v1/theme.css', CORE + '/core/v1/icons/favicon.svg', CORE + '/core/v1/icons/mark.svg'];
 

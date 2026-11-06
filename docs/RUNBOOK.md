@@ -19,8 +19,9 @@ Order: staging first (while it exists as a separate project), test, then live. A
 1. `db/core/001_init.sql`, then the security check.
 2. On the site, **Request access** with your email, a username (e.g. `niyaz`) and a password.
 3. `select core.make_super('niyaz');` - your account is active and super.
-4. Admin page > Tiles > New tile `demo` (name Demo, right `edit`), then `demo/db/demo/001_init.sql`, security check, switch the tile on.
-Staging only: `db/core/seed-staging.sql` creates the demo tile and four demo accounts (password `DemoPass2026`). Never on live.
+4. The other core files in order (`db/migrations.json`; Admin > Health lists them), then the security check.
+5. Admin page > Tiles > New tile `demo` (name Demo), then `demo/db/demo/001_init.sql` and `002_access.sql`, security check, switch the tile on.
+Staging only: `db/core/seed-staging.sql` creates the demo tile and five demo accounts (password `DemoPass2026`). Never on live.
 
 ## Create a user (no email needed)
 Admin page > Users > **New user**: username, display name, temporary password (10+ characters, mixed case, a digit). Tell the person the username and the temporary password by voice; he signs in with them and must choose his own password at once. Users who prefer their own email can still use **Request access** on the site and wait for your approval.
@@ -30,7 +31,8 @@ Admin page > Users > **Manage** on the user's row (needs `db/core/008_manage_use
 - **Name**: change the username and the display name. An account you created signs in with the new username at once (tell him); an account on his own email keeps signing in with the email, only the handle changes. The old username stays with that account: nobody else can take it (a newcomer would otherwise inherit history lines and files written under it). To free one anyway: `select core.release_username('name');`
 - **Password**: type one or press **Generate**, then **Set password**. He is signed out everywhere at once. With "Ask for a new password at the next sign-in" ticked (the default) it is a reset: he must choose his own at sign-in. Unticked, it is a password he keeps. Tell it by voice or in person, never by chat.
 - **Disable / Enable**: as below.
-- **Delete account**: type the username, then **Delete for good**. The sign-in, the profile and all tile access go; what he wrote in tiles stays under the name saved at the time. Cannot be undone; if unsure, disable instead. If a tile ties records to the account the delete is refused with a message: disable the account.
+- **Access** (Check access): every tile he can open with his level and why (own, through which group), his special rights, what he owns and what is shared with him. **Hand over** moves everything he owns (projects, maps, notebooks ...) to another active person; a red note names any tile the new owner cannot open yet (give it in Tiles > Access).
+- **Delete account**: type the username, then **Delete for good**. The sign-in, the profile, all tile access, group memberships and shares go; what he wrote in tiles stays under the name saved at the time. Cannot be undone; if unsure, disable instead. Refused while he still owns something in a tile: hand it over first (above). If a tile ties records to the account in another way the delete is refused with a message: disable the account.
 Your own row and other super users show the name section only: your password is changed on the Account page, a super user's in SQL (below).
 
 ## Approve, refuse, disable, enable a user
@@ -52,6 +54,13 @@ select core.make_super('name');                                   -- add
 update core.profiles set is_super = false where username = 'name'; -- remove
 ```
 
+## Give access: levels, groups, managers
+- **Tiles > Access** (or, for a tile's manager, account menu > *Access to <tile>* inside the tile): each person and each group has one level - No access, Read, Contribute, Edit, Approve, Manage. A person's level is the highest of his own and his groups'; the row says "Edit through Application" when a group gives more. What each level means in that tile is under *What the levels mean*. Special rights, if the tile declares any, are the chips under the name.
+- **Manage** is the tile admin: he gives the other levels to people and groups of his tile and opens everything in it. Only you give or take Manage.
+- **Groups** (Admin > Groups): New group, Members, Edit, Delete (type the name). A group reaches nothing until it has a level on a tile (Tiles > Access) or something is shared with it. Deleting a group takes its levels and shares with it; its members keep their own access.
+- **Sharing one project, map or notebook**: its owner or a manager presses **Share** in the tile: everyone in the tile (can edit or can view), or only the people and groups listed (Can view / Can edit). Nobody gets more than his level in the tile. Managers always open it.
+- A tile that has not run `core.tile_declare` yet shows "Not declared" in Tiles; its rights field still works the old way until then.
+
 ## Switch a tile off / on
 Admin page > Tiles > the switch. Off: the tile disappears from every dashboard and every `public.<tile>_*` function refuses with `NO_ACCESS`. Use it the moment a tile breaks a rule.
 
@@ -60,7 +69,7 @@ Admin page > Tiles > the switch. Off: the tile disappears from every dashboard a
 - **Secret / service_role key** or the **database password**: rotate in the dashboard at once if it was ever shown anywhere. DAME never uses them, so nothing in the repos changes. Tell the admin project so `docs/STATUS.md` records the date.
 
 ## Departing team member
-Admin page > Users > Manage > Disable (delete later, once nobody needs his account any more). GitHub: remove him as collaborator from his tile repo. If he was a tile admin, name another one (Tiles > Access).
+Admin page > Users > Manage: **Hand over** what he owns to his successor, then **Disable** (delete later, once nobody needs his account any more). Take him out of his groups (Groups > Members). GitHub: remove him as collaborator from his tile repo. If he was a manager of a tile, give Manage to another (Tiles > Access).
 
 ## Sign-in troubles
 - "Wrong username or password" for a user who is sure: `select p.username, u.email, p.status, p.session_started_at from core.profiles p join auth.users u on u.id = p.id where p.username = 'name';` then reset the password.

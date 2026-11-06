@@ -27,11 +27,12 @@ GitHub Pages and the Supabase API are reachable from the internet; that is how t
 ## 3. Database rules (the real wall)
 1. **Only `public` is exposed** to the API, and `public` holds **only functions**: never a table, view or sequence. Tables live in `core` or a tile schema, which the API cannot reach.
 2. **RLS on every table** in every schema, even unexposed ones. No policies unless a rule below needs one.
-3. **Functions:** `security definer`, `set search_path = ''`, every name fully qualified. First line: `core.require_user()` or `core.require_tile('<tile-id>', <right>)`. Return only the columns the page needs; never return `auth.*` rows, ids of other users' sessions, or anything the caller may not see.
+3. **Functions:** `security definer`, `set search_path = ''`, every name fully qualified. First line: `core.require_user()`, `core.require_tile('<tile-id>', <right or level>)`, `core.require_level(...)` or, for anything inside a container, `core.require_container('<tile-id>', '<kind>', <id>, <level>)`. Return only the columns the page needs; never return `auth.*` rows, ids of other users' sessions, or anything the caller may not see.
 4. **Execute rights:** `revoke execute ... from public, anon`; `grant execute ... to authenticated` per function. Default privileges in every schema revoke execute from `public`. `anon` may execute nothing except `core_site_info()` (site name for the login page).
-5. **Storage:** every bucket private (`public = false`), named after its tile. Policies on `storage.objects` allow read/write only when `core.has_tile(auth.uid(), '<tile-id>', <right>)` is true and the path starts with the record the user may open. Downloads by short-lived signed URL (5 minutes) or authenticated fetch.
+5. **Storage:** every bucket private (`public = false`), named after its tile. Policies on `storage.objects` allow read/write only when `core.has_tile(auth.uid(), '<tile-id>', <right or level>)` is true and the path starts with the record the user may open (for a container: `core.container_level(auth.uid(), '<tile-id>', '<kind>', <first folder>)` is not null, or at least the level needed). Downloads by short-lived signed URL (5 minutes) or authenticated fetch.
 6. **`core.security_check()`** returns one row per problem: a table without RLS, any object in `public` that is not a function, a `public` function without an allowed prefix, a function executable by `anon` or `public` other than `core_site_info`, a public bucket, a policy granting `anon`. It must return no rows on staging and live after every SQL file. The Supabase Security Advisor must show no errors.
-7. Every SQL file is read by the owner before it runs: it may touch only its own schema, its own `public.<prefix>_*` functions, its own bucket and its own storage policies.
+7. Every SQL file is read by the owner before it runs: it may touch only its own schema, its own `public.<prefix>_*` functions, its own bucket and its own storage policies, and call `core.tile_declare` / `core.container_put` for its own tile id.
+8. **Access** (`docs/TILE-CONTRACT.md` section 5): levels, groups and sharing live only in the core (`core.tile_access`, `core.tile_group_access`, `core.groups`, `core.group_members`, `core.containers`, `core.shares`). Only the super user creates groups and names managers. A person never gets more inside a container than his level in the tile, and a container he may not open answers `NOT_FOUND`. Managers open every container of their tile. An account that owns containers is handed over before it can be deleted.
 
 ## 4. Browser rules
 - Every page has a Content Security Policy as its first `<head>` element:
@@ -65,7 +66,7 @@ Every GitHub Pages site of one account shares one address (today `https://niyaz8
 - Departing team member: disable his DAME account in the admin page (delete it later if no longer needed), remove him as collaborator from his tile repo.
 
 ## 7. Audit
-`core.audit` records sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, renames, passwords set and accounts deleted by the super user (never the password itself), access and rights changes, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
+`core.audit` records sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, renames, passwords set and accounts deleted by the super user (never the password itself), levels and rights given or taken (people and groups), groups and their members, tile declarations, sharing changes (`share_set`), owner changes and handovers, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
 
 ## 8. Checklist for every delivery (core or tile)
 - [ ] No internal data, key or password anywhere in the repo or its history

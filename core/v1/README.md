@@ -43,7 +43,7 @@ The page script starts with the guard and does nothing before it resolves:
 
 ```js
 Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page */ });
-// also: { tile, right: 'edit' }  { super: true }  { page: 'Account' }
+// also: { tile, level: 'approve' }  { tile, right: 'edit' }  { super: true }  { page: 'Account' }
 ```
 
 `style-src 'self'` blocks `style=""` attributes in markup. Set classes instead; setting `node.style.x` from a script is allowed.
@@ -51,7 +51,10 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 ## Core
 | Call | What it does |
 |---|---|
-| `Core.requireLogin(opts)` | Promise of `me` = `{ username, display_name, status, is_super, tile, tile_admin, rights }`. Shows "waiting for approval" / "nothing here" itself and never resolves in those cases. Sends to sign-in when signed out. |
+| `Core.requireLogin(opts)` | Promise of `me` = `{ username, display_name, status, is_super, tile, tile_admin, level, levels, rights }` (`tile` carries `levels` = what each level means here, and `kinds`). Shows "waiting for approval" / "nothing here" itself and never resolves in those cases. Sends to sign-in when signed out. |
+| `Core.atLeast(level)`, `Core.levelRank(level)`, `Core.levelMeaning(level)` | The user's level in this tile against `read < contribute < edit < approve < manage` (super users: always true); what a level means in this tile. Showing and hiding only. |
+| `Core.LEVELS`, `Core.LEVEL_NAMES`, `Core.LEVEL_HINTS` | The five level names, their labels and general meanings. |
+| `Core.share({ kind, id })` | The Access panel of one container of this tile (`docs/TILE-CONTRACT.md` section 5): who can open it, people and groups (Can view / Can edit), owner; Change owner for managers. Promise of `true` when something changed (reload the list then). Loads `core/v1/share.js` on first use. |
 | `Core.user`, `Core.tile` | Set once the guard passed. For showing and hiding only; the database decides. |
 | `Core.el(tag, attrs, ...children)` | Builds an element. `attrs`: `class`, `text`, `on: { click: fn }`, `dataset`, any attribute. Children: strings, nodes, arrays. |
 | `Core.clear(node)`, `Core.append(node, child)`, `Core.$(selector)` | DOM helpers. |

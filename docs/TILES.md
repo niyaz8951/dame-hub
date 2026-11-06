@@ -10,6 +10,8 @@ One line per tile. The admin project keeps this file; the admin page keeps the l
 | `projects` | Projects | `projects` (public, code only); source: Thinkneering Projects tool, moved as it is | owner | owner | DAME - Projects (instructions: `docs/tiles/projects-project-instructions.md`; chats `DAME-PROJECTS`) | vendored pdf.js (as Tools) | on 2026-11-05; steps 1-4 checked, 001-007 applied; step 5 (Product Options) and Matching rules built, 008-010 to apply |
 | `maps` | Maps | `maps` (public, code only); source: Thinkneering Maps tool, moved and improved (knowledge, flowchart, piping, wiring) | owner | owner | DAME - Maps (instructions: `docs/tiles/maps-project-instructions.md`; chats `DAME-MAPS`) | - | step 1 checked 2026-11-05, 001-002 applied; steps 2-3 (knowledge extras, flowcharts) built, 003-005 to apply; colour rose, icon `map` |
 
+Access (2026-11-06): `011_access.sql` declares `projects`, `hvac-notes`, `maps`, `demo`, `tools` with aliases for their old rights; each tile then moves to containers in its own chat (`docs/TILE-CHANGES.md`).
+
 ## Source repos
 Private repos holding a tile's authoring copy (`docs/NEW-TILE.md`, "Bringing an existing site in"). Pages always off; the site never reads them.
 | Repo | Tile | People |

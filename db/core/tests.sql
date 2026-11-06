@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 010). Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 011). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -388,6 +388,227 @@ begin
   if v -> 'last' -> 'detail' -> 0 ->> 'object' <> 'core.t_norls' then raise exception 'health detail: %', v -> 'last' -> 'detail'; end if;
   reset role;
   raise notice 'health ok';
+
+
+  -- ---- 011: levels, groups, declarations, containers, the Access panel, Check access, Handover
+  declare
+    v_mgr uuid; v_one uuid; v_two uuid; v_three uuid; v_out uuid; v_r uuid; v_g uuid; v_g2 uuid;
+  begin
+    reset role;
+    insert into auth.users (email, raw_user_meta_data) values
+      ('a.mgr@example.com', '{"username":"a.mgr","display_name":"A Manager"}'), ('a.one@example.com', '{"username":"a.one"}'),
+      ('a.two@example.com', '{"username":"a.two"}'), ('a.three@example.com', '{"username":"a.three"}'),
+      ('a.out@example.com', '{"username":"a.out"}'), ('a.r@example.com', '{"username":"a.r"}');
+    insert into t_ids select username, id from core.profiles where username like 'a.%';
+    update core.profiles set status = 'active' where username like 'a.%';
+    v_mgr := (select id from t_ids where k = 'a.mgr'); v_one := (select id from t_ids where k = 'a.one');
+    v_two := (select id from t_ids where k = 'a.two'); v_three := (select id from t_ids where k = 'a.three');
+    v_out := (select id from t_ids where k = 'a.out'); v_r := (select id from t_ids where k = 'a.r');
+
+    -- a tile, declared by the owner (SQL editor or the tile's own file); the API role may not declare
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform public.core_admin_tile_save('a-tile', 'Access tile', '', 'tile', 'teal', 20, array['old_right']);
+    perform public.core_admin_tile_enable('a-tile', true);
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{}')$q$, 'PERMISSION');
+    perform pg_temp.expect_error($q$select core.container_put('a-tile', 'box', 'x', 'x')$q$, 'PERMISSION');
+    reset role;
+    perform core.tile_declare('a-tile', '{"levels":{"read":"Read boxes","manage":"Everything"},"aliases":{"edit":"contribute","verify":"approve"},
+      "rights":{"special_x":"A special right"},"kinds":{"box":"Box"},"default":"contribute"}');
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{"aliases":{"edit":"boss"}}')$q$, 'INVALID:aliases edit');
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{"rights":{"approve":"x"}}')$q$, 'INVALID:rights approve');
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{"kinds":{"Bad Kind":"x"}}')$q$, 'INVALID:kinds Bad Kind');
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{"default":"manage"}')$q$, 'INVALID:default');
+    perform pg_temp.expect_error($q$select core.tile_declare('a-tile', '{"other":1}')$q$, 'INVALID:spec other');
+    perform pg_temp.expect_error($q$select core.tile_declare('ghost', '{}')$q$, 'NOT_FOUND');
+    if (select rights from core.tiles where id = 'a-tile') <> array['special_x'] then raise exception 'declare rights'; end if;
+
+    -- levels: people and a group (super user)
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    -- the form cannot change a declared tile's rights
+    perform public.core_admin_tile_save('a-tile', 'Access tile', '', 'tile', 'teal', 20, array['other']);
+    if (select rights from public.core_admin_tiles() where id = 'a-tile') <> array['special_x'] then raise exception 'declared rights kept'; end if;
+    perform public.core_tile_level_set('a-tile', 'user', v_mgr, 'manage');
+    perform public.core_tile_level_set('a-tile', 'user', v_one, 'contribute', array['special_x']);
+    perform public.core_tile_level_set('a-tile', 'user', v_two, 'read');
+    perform public.core_tile_level_set('a-tile', 'user', v_r, 'read');
+    v_g := (public.core_admin_group_save(null, ' Application ', 'Application engineers') ->> 'id')::uuid;
+    perform pg_temp.expect_error($q$select public.core_admin_group_save(null, 'application', '')$q$, 'TAKEN:group');
+    perform pg_temp.expect_error($q$select public.core_admin_group_save(null, 'x', '')$q$, 'INVALID:name');
+    perform public.core_admin_group_members_set(v_g, array[v_two, v_three]);
+    perform pg_temp.expect_error(format('select public.core_admin_group_members_set(%L, array[%L]::uuid[])', v_g, (select id from t_ids where k = 't.pending')), 'INVALID:user');
+    perform public.core_tile_level_set('a-tile', 'group', v_g, 'edit');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''boss'')', v_one), 'INVALID:level');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''read'', array[''nope''])', v_one), 'INVALID:rights');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''team'', %L, ''read'')', v_one), 'INVALID:type');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''read'')', (select id from t_ids where k = 't.super')), 'INVALID:user');
+    reset role;
+    if core.tile_level(v_two, 'a-tile') <> 'edit' or core.tile_level(v_three, 'a-tile') <> 'edit' then raise exception 'group level'; end if;
+    if core.tile_level(v_one, 'a-tile') <> 'contribute' or core.tile_level(v_out, 'a-tile') is not null then raise exception 'own level'; end if;
+    -- aliases, special rights, level names
+    if not core.has_tile(v_one, 'a-tile', 'edit') or core.has_tile(v_one, 'a-tile', 'verify') then raise exception 'alias one'; end if;
+    if not core.has_tile(v_mgr, 'a-tile', 'verify') or not core.has_tile(v_mgr, 'a-tile', 'special_x') then raise exception 'manager holds all'; end if;
+    if not core.has_tile(v_one, 'a-tile', 'special_x') or core.has_tile(v_two, 'a-tile', 'special_x') then raise exception 'special'; end if;
+    if not core.has_tile(v_two, 'a-tile', 'contribute') or core.has_tile(v_two, 'a-tile', 'approve') then raise exception 'level names'; end if;
+    if core.has_tile(v_one, 'a-tile', 'undeclared') or core.has_tile(v_out, 'a-tile') then raise exception 'undeclared or no access'; end if;
+    if not core.is_tile_admin(v_mgr, 'a-tile') or core.is_tile_admin(v_one, 'a-tile') then raise exception 'is_tile_admin'; end if;
+    if (select is_admin from core.tile_access where user_id = v_mgr and tile_id = 'a-tile') is not true then raise exception 'is_admin mirror'; end if;
+    -- page view: level, levels, held names
+    perform pg_temp.act_as('a.three'); perform public.core_session_start();
+    select public.core_me('a-tile') into v;
+    if v ->> 'level' <> 'edit' or v -> 'levels' <> '["read","contribute","edit"]' or v -> 'rights' <> '["edit"]' or (v ->> 'tile_admin')::boolean then raise exception 'me three: %', v; end if;
+    if v -> 'tile' -> 'kinds' ->> 'box' <> 'Box' then raise exception 'me kinds'; end if;
+    if (select level from public.core_my_tiles() where id = 'a-tile') <> 'edit' then raise exception 'my_tiles level'; end if;
+    perform pg_temp.expect_error('select public.core_tile_access_list(''a-tile'')', 'NO_RIGHT');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''read'')', v_one), 'NO_RIGHT');
+    perform pg_temp.expect_error('select public.core_admin_groups()', 'NO_RIGHT');
+    reset role;
+    perform core.require_level('a-tile', 'edit');
+    perform pg_temp.expect_error('select core.require_level(''a-tile'', ''approve'')', 'NO_RIGHT');
+    perform pg_temp.expect_error('select core.require_level(''a-tile'', ''boss'')', 'INVALID:level');
+
+    -- a manager: levels below manage only, not himself, not a group he is in
+    perform pg_temp.act_as('a.mgr'); perform public.core_session_start();
+    select public.core_tile_access_list('a-tile') into v;
+    if (v ->> 'can_name_managers')::boolean or jsonb_array_length(v -> 'groups') <> 1 then raise exception 'access list: %', v; end if;
+    if (select e ->> 'effective' from jsonb_array_elements(v -> 'people') e where e ->> 'username' = 'a.three') <> 'edit' then raise exception 'effective via group'; end if;
+    perform public.core_tile_level_set('a-tile', 'user', v_out, 'read');
+    perform public.core_tile_level_set('a-tile', 'user', v_out, null);
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''manage'')', v_one), 'NO_RIGHT');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''group'', %L, ''manage'')', v_g), 'NO_RIGHT');
+    perform pg_temp.expect_error(format('select public.core_tile_level_set(''a-tile'', ''user'', %L, ''read'')', v_mgr), 'INVALID:user');
+    perform pg_temp.expect_error('select public.core_tile_access_list(''t-tile'')', 'NO_RIGHT');
+    reset role;
+
+    -- containers: a.one makes box b1, only him (as the tile's function does: owner role, caller's session)
+    perform pg_temp.act_as('a.one'); perform public.core_session_start(); reset role;
+    perform core.container_put('a-tile', 'box', 'b1', 'Box one', null);
+    perform pg_temp.expect_error($q$select core.container_put('a-tile', 'crate', 'b9', 'x')$q$, 'INVALID:kind');
+    perform pg_temp.expect_error($q$select core.container_put('a-tile', 'box', 'b9', '  ')$q$, 'INVALID:name');
+    perform pg_temp.expect_error($q$select core.container_put('a-tile', 'box', 'b9', 'x', 'all')$q$, 'INVALID:everyone');
+    if core.container_level(v_one, 'a-tile', 'box', 'b1') <> 'contribute' then raise exception 'owner level'; end if;
+    if core.container_level(v_mgr, 'a-tile', 'box', 'b1') <> 'manage' then raise exception 'managers see all'; end if;
+    if core.container_level((select id from t_ids where k = 't.super'), 'a-tile', 'box', 'b1') <> 'manage' then raise exception 'super sees all'; end if;
+    if core.container_level(v_two, 'a-tile', 'box', 'b1') is not null or core.container_level(v_out, 'a-tile', 'box', 'b1') is not null then raise exception 'private'; end if;
+    if core.container_level(v_one, 'a-tile', 'box', 'nope') is not null then raise exception 'unregistered'; end if;
+    perform core.require_container('a-tile', 'box', 'b1', 'contribute');
+    perform pg_temp.expect_error($q$select core.require_container('a-tile', 'box', 'b1', 'edit')$q$, 'NO_RIGHT');
+    if (select count(*) from core.container_ids('a-tile', 'box')) <> 1 then raise exception 'ids owner'; end if;
+    if (core.container_info('a-tile', 'box', 'b1') ->> 'mine')::boolean is not true then raise exception 'info mine'; end if;
+    perform pg_temp.act_as('a.two'); perform public.core_session_start(); reset role;
+    perform pg_temp.expect_error($q$select core.require_container('a-tile', 'box', 'b1')$q$, 'NOT_FOUND');
+    if (select count(*) from core.container_ids('a-tile', 'box')) <> 0 then raise exception 'ids private'; end if;
+    if core.container_info('a-tile', 'box', 'b1') is not null then raise exception 'info private'; end if;
+
+    -- the Access panel: owner shares; others may look but not change
+    perform pg_temp.act_as('a.two'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_share_get('a-tile', 'box', 'b1')$q$, 'NOT_FOUND');
+    perform pg_temp.act_as('a.one'); perform public.core_session_start();
+    select public.core_share_get('a-tile', 'box', 'b1') into v;
+    if not (v ->> 'can_share')::boolean or (v ->> 'can_change_owner')::boolean or v ->> 'kind_label' <> 'Box' or v -> 'owner' ->> 'username' <> 'a.one' then raise exception 'share get: %', v; end if;
+    select public.core_share_set('a-tile', 'box', 'b1', null, jsonb_build_array(jsonb_build_object('type', 'user', 'id', v_two, 'level', 'read'),
+      jsonb_build_object('type', 'user', 'id', v_r, 'level', 'edit'), jsonb_build_object('type', 'user', 'id', v_one, 'level', 'edit'))) into v;
+    if jsonb_array_length(v -> 'shares') <> 2 then raise exception 'owner not shared with himself: %', v -> 'shares'; end if;
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', null, '[{"type":"user","id":"00000000-0000-0000-0000-000000000000","level":"owner"}]')$q$, 'INVALID:shares');
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', null, '[{"type":"group","id":"00000000-0000-0000-0000-000000000000","level":"read"}]')$q$, 'INVALID:group');
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', 'all', '[]')$q$, 'INVALID:everyone');
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', null, '{}')$q$, 'INVALID:shares');
+    select count(*) into n from public.core_share_people('a-tile') p, jsonb_array_elements(p -> 'people') e; if n <> 6 then raise exception 'share people: %', n; end if;
+    reset role;
+    if core.container_level(v_two, 'a-tile', 'box', 'b1') <> 'read' then raise exception 'can view'; end if;
+    if core.container_level(v_r, 'a-tile', 'box', 'b1') <> 'read' then raise exception 'tile level is the ceiling'; end if;
+    perform pg_temp.act_as('a.two'); perform public.core_session_start();
+    select public.core_share_get('a-tile', 'box', 'b1') into v; if (v ->> 'can_share')::boolean then raise exception 'viewer shares'; end if;
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', 'edit', '[]')$q$, 'NO_RIGHT');
+    perform pg_temp.act_as('a.out'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_share_get('a-tile', 'box', 'b1')$q$, 'NO_ACCESS');
+    perform pg_temp.expect_error($q$select public.core_share_people('a-tile')$q$, 'NO_ACCESS');
+    perform pg_temp.act_as(null);
+    perform pg_temp.expect_error($q$select public.core_share_get('a-tile', 'box', 'b1')$q$, 'PERMISSION');
+    reset role;
+    -- a group "Can edit": its members work at their tile level; everyone "Can view"
+    perform pg_temp.act_as('a.one'); perform public.core_session_start();
+    perform public.core_share_set('a-tile', 'box', 'b1', 'read', jsonb_build_array(jsonb_build_object('type', 'group', 'id', v_g, 'level', 'edit')));
+    reset role;
+    if core.container_level(v_three, 'a-tile', 'box', 'b1') <> 'edit' then raise exception 'group can edit'; end if;
+    if core.container_level(v_r, 'a-tile', 'box', 'b1') <> 'read' then raise exception 'everyone can view'; end if;
+    perform pg_temp.act_as('a.r'); perform public.core_session_start(); reset role;
+    if (select count(*) from core.container_ids('a-tile', 'box')) <> 1 or (select count(*) from core.container_ids('a-tile', 'box', 'edit')) <> 0 then raise exception 'ids level'; end if;
+
+    -- a manager changes the owner; the old owner can no longer share
+    perform pg_temp.act_as('a.mgr'); perform public.core_session_start();
+    select public.core_share_get('a-tile', 'box', 'b1') into v; if not (v ->> 'can_change_owner')::boolean then raise exception 'mgr owner'; end if;
+    perform pg_temp.expect_error(format('select public.core_share_owner_set(''a-tile'', ''box'', ''b1'', %L)', v_out), 'INVALID:user');
+    perform public.core_share_owner_set('a-tile', 'box', 'b1', v_three);
+    perform pg_temp.act_as('a.one'); perform public.core_session_start();
+    perform pg_temp.expect_error(format('select public.core_share_owner_set(''a-tile'', ''box'', ''b1'', %L)', v_one), 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_share_set('a-tile', 'box', 'b1', 'edit', '[]')$q$, 'NO_RIGHT'); -- still "everyone can view"
+    reset role;
+
+    -- Check access, Handover, delete refused while owning, group delete
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    select public.core_admin_check_access(v_three) into v;
+    if v -> 'groups' -> 0 ->> 'name' <> 'Application' or (select e ->> 'level' from jsonb_array_elements(v -> 'tiles') e where e ->> 'id' = 'a-tile') <> 'edit'
+       or jsonb_array_length(v -> 'owns') <> 1 then raise exception 'check access: %', v; end if;
+    perform pg_temp.expect_error(format('select public.core_admin_delete_user(%L, ''a.three'')', v_three), 'IN_USE:containers');
+    perform pg_temp.expect_error(format('select public.core_admin_handover(%L, %L)', v_three, v_three), 'INVALID:user');
+    select public.core_admin_handover(v_three, v_out) into v;
+    if (v ->> 'moved')::int <> 1 or v -> 'without_access' <> '["a-tile"]' then raise exception 'handover: %', v; end if;
+    select public.core_admin_handover(v_out, v_one, 'a-tile') into v; if (v ->> 'moved')::int <> 1 then raise exception 'handover back'; end if;
+    perform public.core_admin_delete_user(v_three, 'a.three');
+    select count(*) into n from jsonb_array_elements(public.core_admin_groups()) g where g ->> 'name' = 'Application' and jsonb_array_length(g -> 'members') = 1;
+    if n <> 1 then raise exception 'groups list'; end if;
+    perform pg_temp.expect_error(format('select public.core_admin_group_delete(%L, ''Sales'')', v_g), 'INVALID:confirm');
+    perform public.core_admin_group_delete(v_g, 'application');
+    reset role;
+    if core.tile_level(v_two, 'a-tile') <> 'read' then raise exception 'group gone'; end if;
+    if exists (select 1 from core.shares where group_id = v_g) then raise exception 'group shares gone'; end if;
+    -- a tile's migration: holders of a special right become shares; share_put by hand
+    perform core.container_put('a-tile', 'box', 'b2', 'Box two', null, v_mgr);
+    update core.tile_access set rights = array['special_x'] where tile_id = 'a-tile' and user_id = v_two;
+    if core.shares_from_right('a-tile', 'special_x', 'box', 'b2', 'read') <> 2 then raise exception 'shares_from_right count'; end if;
+    if core.container_level(v_two, 'a-tile', 'box', 'b2') <> 'read' then raise exception 'shares_from_right level'; end if;
+    perform core.share_put('a-tile', 'box', 'b2', v_r, null, 'edit');
+    perform core.share_put('a-tile', 'box', 'b2', v_mgr, null, 'edit');   -- the owner: ignored
+    if (select count(*) from core.shares where tile_id = 'a-tile' and id = 'b2') <> 3 then raise exception 'share_put'; end if;
+    perform pg_temp.expect_error($q$select core.share_put('a-tile', 'box', 'nope', null, null)$q$, 'NOT_FOUND');
+    perform pg_temp.expect_error($q$select core.share_put('a-tile', 'box', 'b2', null, null)$q$, 'INVALID:shares');
+    perform pg_temp.act_as('a.one'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select core.share_put('a-tile', 'box', 'b2', null, null)$q$, 'PERMISSION');
+    reset role;
+    -- redeclaring without a special right takes it from everyone; a tile switched off opens nothing
+    perform core.tile_declare('a-tile', '{"kinds":{"box":"Box"}}');
+    if exists (select 1 from core.tile_access where tile_id = 'a-tile' and rights <> '{}') then raise exception 'special right left'; end if;
+    update core.tiles set enabled = false where id = 'a-tile';
+    if core.container_level(v_one, 'a-tile', 'box', 'b1') is not null then raise exception 'tile off'; end if;
+    -- storage policies may ask the container level; the API role may not reach the rest
+    perform pg_temp.act_as('a.one'); perform public.core_session_start();
+    perform core.container_level(v_one, 'a-tile', 'box', 'b1');
+    perform pg_temp.expect_error($q$select core.require_container('a-tile', 'box', 'b1')$q$, 'PERMISSION');
+    perform pg_temp.expect_error($q$select core.container_ids('a-tile', 'box')$q$, 'PERMISSION');
+    perform pg_temp.expect_error($q$select core.tile_level(null, 'a-tile')$q$, 'PERMISSION');
+    reset role;
+  end;
+  raise notice 'access (011) ok';
+
+
+  -- ---- 011: the security check passes pg_cron's own two policies, and only those, only in pg_cron's shape
+  if exists (select 1 from core.security_check() where object like 'cron.%') then raise exception 'pg_cron policies reported'; end if;
+  if to_regnamespace('cron') is null then   -- local: a stand-in for pg_cron, rolled back with the rest
+    create schema cron;
+    create table cron.job (jobid bigint, username text not null default current_user);
+    create table cron.job_run_details (runid bigint, username text);
+    alter table cron.job enable row level security; alter table cron.job_run_details enable row level security;
+    create policy cron_job_policy on cron.job using (username = current_user);
+    create policy cron_job_run_details_policy on cron.job_run_details using (username = current_user);
+    if exists (select 1 from core.security_check() where object like 'cron.%') then raise exception 'pg_cron policies reported'; end if;
+    create policy t_other on cron.job using (true);
+    if not exists (select 1 from core.security_check() where object = 'cron.job: t_other') then raise exception 'other cron policy missed'; end if;
+    drop policy t_other on cron.job;
+    alter policy cron_job_policy on cron.job using (true);
+    if not exists (select 1 from core.security_check() where object = 'cron.job: cron_job_policy') then raise exception 'changed cron policy missed'; end if;
+    drop schema cron cascade;
+  end if;
+  raise notice 'security check: pg_cron policies ok';
 
   -- ---- applied() refuses a second run
   perform pg_temp.expect_error('select core.applied(''dame-hub'', ''001_init'')', 'ALREADY_APPLIED: dame-hub/001_init');

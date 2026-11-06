@@ -1,4 +1,4 @@
-/* Admin page: requests, users, tiles, access, audit, health. Super user only. */
+/* Admin page: requests, users, groups, tiles, access, audit, health. Super user only. */
 (function () {
   'use strict';
   var $ = Core.$, el = Core.el;
@@ -13,6 +13,7 @@
       if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // phones: the tab row scrolls sideways
       if (name === 'requests') loadRequests();
       if (name === 'users') loadUsers();
+      if (name === 'groups') loadGroups();
       if (name === 'tiles') loadTiles();
       if (name === 'audit') loadAudit(true);
       if (name === 'health') loadHealth();
@@ -20,7 +21,7 @@
     }
     tabs.forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
     var start = window.location.hash.replace('#', '');
-    showTab(['requests', 'users', 'tiles', 'audit', 'health'].indexOf(start) >= 0 ? start : 'requests');
+    showTab(['requests', 'users', 'groups', 'tiles', 'audit', 'health'].indexOf(start) >= 0 ? start : 'requests');
     countRequests();
     if (start !== 'health') loadHealth(true);
   });
@@ -172,7 +173,7 @@
           }, function (ex) { say(nameErr, Api.errorMessage(ex)); });
       } } })));
 
-    var parts = [head, nameBox];
+    var parts = [head, nameBox, accessBox(u, function () { changed = true; })];
 
     if (!limited) {
       // password
@@ -242,13 +243,155 @@
       .then(function () { if (changed) { loadUsers(); countRequests(); } });
   }
 
+  // Users > Manage > Access: Check access (every tile, group and shared item, and why) and Handover.
+  function accessBox(u, onChange) {
+    var box = el('div', { class: 'stack' }, el('h3', { class: 'section-title', text: 'Access' }));
+    var out = el('div', { class: 'stack', id: 'mu-access' });
+    box.appendChild(out);
+    function draw() {
+      Core.clear(out); out.appendChild(el('div', { class: 'loading-veil' }, el('span', { class: 'spin' }), 'Loading'));
+      Api.rpc('core_admin_check_access', { p_user: u.id }).then(function (a) {
+        Core.clear(out);
+        out.appendChild(el('p', { class: 'muted', text: a.groups.length ? 'Groups: ' + a.groups.map(function (g) { return g.name; }).join(', ') + '.' : 'In no group.' }));
+        if (!a.tiles.length) out.appendChild(el('p', { class: 'faint', text: 'No tile.' }));
+        else {
+          var tl = el('div', { class: 'plist' });
+          a.tiles.forEach(function (t) {
+            var why = [];
+            if (a.user.is_super) why.push('super user');
+            else {
+              if (t.own) why.push('own ' + Core.LEVEL_NAMES[t.own]);
+              (t.via || []).forEach(function (v) { why.push(Core.LEVEL_NAMES[v.level] + ' through ' + v.group); });
+            }
+            if (t.rights && t.rights.length) why.push('rights ' + t.rights.join(', '));
+            if (t.owns) why.push('owns ' + t.owns);
+            if (t.shared) why.push(t.shared + ' shared with him');
+            tl.appendChild(el('div', { class: 'pitem', dataset: { tile: t.id } },
+              el('div', { class: 'grow' }, el('span', { class: 'n', text: t.name + (t.enabled ? '' : ' (off)') }), el('span', { class: 'u', text: why.join(' - ') || '-' })),
+              el('span', { class: 'badge' + (t.level ? '' : ' warning'), text: t.level ? Core.LEVEL_NAMES[t.level] : 'No access' })));
+          });
+          out.appendChild(tl);
+        }
+        if (a.owns.length) {
+          out.appendChild(el('p', { class: 'muted', text: 'Owns ' + a.owns.length + ': ' + a.owns.slice(0, 12).map(function (c) { return c.name + ' (' + c.tile + ')'; }).join(', ') + (a.owns.length > 12 ? ' ...' : '') }));
+          var to = el('select', { id: 'mu-handover-to', 'aria-label': 'Hand over to' }, el('option', { value: '', text: 'Hand everything over to ...' }));
+          usersAll.filter(function (x) { return x.status === 'active' && x.id !== u.id; }).forEach(function (x) { to.appendChild(el('option', { value: x.id, text: x.display_name + ' (@' + x.username + ')' })); });
+          var go = el('button', { class: 'btn', type: 'button', id: 'mu-handover', text: 'Hand over', on: { click: function () {
+            if (!to.value) { Core.toast('Choose who takes them over.'); return; }
+            Core.busy(go, function () { return Api.rpc('core_admin_handover', { p_from: u.id, p_to: to.value, p_tile: null }); })
+              .then(function (r) {
+                onChange();
+                Core.toast(r.moved + ' handed over', 'success');
+                if (r.without_access && r.without_access.length) Core.toast('The new owner has no access to: ' + r.without_access.join(', ') + '. Give it in Tiles > Access.', 'danger');
+                draw();
+              }).catch(Core.showError);
+          } } });
+          out.appendChild(el('div', { class: 'row' }, el('div', { class: 'grow' }, to), go));
+        } else out.appendChild(el('p', { class: 'faint', text: 'Owns nothing in the tiles.' }));
+      }).catch(function (err) { Core.clear(out); out.appendChild(Access.notReady(err) || el('p', { class: 'notice danger', text: Api.errorMessage(err) })); });
+    }
+    draw();
+    return box;
+  }
+
+  // ---------- groups ----------
+  function loadGroups() {
+    var host = $('#groups'); loading(host);
+    var need = usersAll.length ? Promise.resolve(usersAll) : Api.rpc('core_admin_users', { p_status: null }).then(function (r) { usersAll = r; return r; });
+    Promise.all([Api.rpc('core_admin_groups', {}), need]).then(function (res) {
+      var groups = res[0];
+      Core.clear(host);
+      if (!groups.length) { host.appendChild(el('div', { class: 'state' }, el('h2', { text: 'No groups yet' }), el('p', { text: 'Make one for each team or region that works the same way, then give it a level on the tiles it needs.' }))); return; }
+      groups.forEach(function (g) {
+        var members = g.members.length ? g.members.map(function (m) { return m.display_name + (m.status === 'active' ? '' : ' (' + m.status + ')'); }).join(', ') : 'No members yet';
+        host.appendChild(el('div', { class: 'card tight stack', dataset: { group: g.name } },
+          el('div', { class: 'row between' },
+            el('div', { class: 'grow' }, el('strong', { text: g.name }), g.note ? el('span', { class: 'faint', text: ' - ' + g.note }) : null),
+            el('span', { class: 'badge', text: g.members.length + (g.members.length === 1 ? ' person' : ' people') })),
+          el('div', { class: 'muted', text: members }),
+          el('div', { class: 'faint', text: (g.tiles.length ? 'Tiles: ' + g.tiles.map(function (t) { return t.name + ' ' + Core.LEVEL_NAMES[t.level]; }).join(', ') : 'No tile yet (Tiles > Access).') +
+            (g.shares ? ' - shared items: ' + g.shares : '') }),
+          el('div', { class: 'row end' },
+            el('button', { class: 'btn small', type: 'button', text: 'Members', on: { click: function () { groupMembers(g); } } }),
+            el('button', { class: 'btn small', type: 'button', text: 'Edit', on: { click: function () { groupForm(g); } } }),
+            el('button', { class: 'btn small danger', type: 'button', text: 'Delete', on: { click: function () { groupDelete(g); } } }))));
+      });
+    }).catch(function (err) { var n = Access.notReady(err); if (n) { Core.clear(host); host.appendChild(n); } else fail(host, err); });
+  }
+  $('#group-new').addEventListener('click', function () { groupForm(null); });
+
+  function groupForm(g) {
+    var err = el('p', { class: 'notice danger', hidden: true });
+    var name = el('input', { id: 'gf-name', maxlength: 40, value: g ? g.name : '', autocomplete: 'off' });
+    var note = el('input', { id: 'gf-note', maxlength: 200, value: g ? g.note : '', autocomplete: 'off' });
+    var body = el('div', null,
+      el('div', { class: 'field' }, el('label', { for: 'gf-name', text: 'Name' }), name, el('span', { class: 'hint', text: '2 to 40 characters, e.g. Application, Sales KSA.' })),
+      el('div', { class: 'field' }, el('label', { for: 'gf-note', text: 'Note' }), note, el('span', { class: 'hint', text: 'Optional, one line: who belongs in it.' })),
+      err);
+    Core.sheet({ title: g ? 'Edit ' + g.name : 'New group', body: body, actions: [
+      { label: 'Cancel', value: false },
+      { label: 'Save', kind: 'primary', onClick: function () {
+        err.hidden = true;
+        return Api.rpc('core_admin_group_save', { p_id: g ? g.id : null, p_name: name.value, p_note: note.value })
+          .then(function (r) { Core.toast('Saved', 'success'); loadGroups(); if (!g) groupMembers({ id: r.id, name: r.name, members: [] }); return true; },
+            function (ex) { err.textContent = Api.errorMessage(ex); err.hidden = false; return false; });
+      } }] });
+  }
+
+  function groupMembers(g) {
+    var chosen = {};
+    g.members.forEach(function (m) { chosen[m.id] = true; });
+    var find = el('input', { placeholder: 'Find a person', 'aria-label': 'Find a person' });
+    var list = el('div', { class: 'plist', id: 'gm-list' });
+    var count = el('p', { class: 'muted' });
+    function draw() {
+      Core.clear(list);
+      var q = find.value.trim().toLowerCase();
+      var people = usersAll.filter(function (u) { return u.status !== 'pending' && (!q || u.username.indexOf(q) >= 0 || u.display_name.toLowerCase().indexOf(q) >= 0); });
+      people.forEach(function (u) {
+        var box = el('input', { type: 'checkbox', id: 'gm-' + u.id, checked: !!chosen[u.id] });
+        box.addEventListener('change', function () { if (box.checked) chosen[u.id] = true; else delete chosen[u.id]; counter(); });
+        list.appendChild(el('label', { class: 'pitem', for: 'gm-' + u.id, dataset: { name: u.username } }, box,
+          el('div', { class: 'grow' }, el('span', { class: 'n', text: u.display_name }), el('span', { class: 'u', text: '@' + u.username + (u.status === 'active' ? '' : ' - ' + u.status) }))));
+      });
+      if (!people.length) list.appendChild(el('p', { class: 'faint', text: 'Nobody matches.' }));
+    }
+    function counter() { var n = Object.keys(chosen).length; count.textContent = n + (n === 1 ? ' member' : ' members') + ' chosen.'; }
+    find.addEventListener('input', draw);
+    draw(); counter();
+    var err = el('p', { class: 'notice danger', hidden: true });
+    Core.sheet({ title: 'Members of ' + g.name, body: el('div', { class: 'stack' }, find, count, list, err), actions: [
+      { label: 'Cancel', value: false },
+      { label: 'Save', kind: 'primary', onClick: function () {
+        err.hidden = true;
+        return Api.rpc('core_admin_group_members_set', { p_group: g.id, p_users: Object.keys(chosen) })
+          .then(function () { Core.toast('Members saved', 'success'); loadGroups(); return true; },
+            function (ex) { err.textContent = Api.errorMessage(ex); err.hidden = false; return false; });
+      } }] });
+  }
+
+  function groupDelete(g) {
+    var input = el('input', { id: 'gd-confirm', autocomplete: 'off', 'aria-label': 'Type the group name to confirm' });
+    var err = el('p', { class: 'notice danger', hidden: true });
+    Core.sheet({ title: 'Delete ' + g.name, body: el('div', { class: 'stack' },
+      el('p', { text: 'The group\'s levels on tiles and everything shared with the group go with it. Its members keep their own access. It cannot be undone.' }),
+      el('div', { class: 'field' }, el('label', { for: 'gd-confirm', text: 'Type ' + g.name + ' to confirm' }), input), err), actions: [
+      { label: 'Cancel', value: false },
+      { label: 'Delete', kind: 'danger', onClick: function () {
+        err.hidden = true;
+        return Api.rpc('core_admin_group_delete', { p_id: g.id, p_confirm: input.value })
+          .then(function () { Core.toast('Deleted ' + g.name, 'success'); loadGroups(); return true; },
+            function (ex) { err.textContent = Api.errorMessage(ex); err.hidden = false; return false; });
+      } }] });
+  }
+
   // ---------- tiles ----------
   function loadTiles() {
     var host = $('#tiles'); loading(host);
     Api.rpc('core_admin_tiles').then(function (rows) {
       tilesCache = rows; Core.clear(host);
       if (!rows.length) { host.appendChild(el('p', { class: 'state', text: 'No tiles yet. Register the first one with "New tile".' })); return; }
-      var table = el('table', null, el('thead', null, el('tr', null, el('th', { text: 'Tile' }), el('th', { text: 'On' }), el('th', { text: 'Rights' }), el('th', { text: 'Users' }), el('th', { text: 'Tile admins' }), el('th'))));
+      var table = el('table', null, el('thead', null, el('tr', null, el('th', { text: 'Tile' }), el('th', { text: 'On' }), el('th', { text: 'Access' }), el('th', { text: 'Given to' }), el('th', { text: 'Managers' }), el('th'))));
       var body = el('tbody');
       rows.forEach(function (t) {
         var sw = el('button', { class: 'switch', type: 'button', role: 'switch', 'aria-checked': String(t.enabled), 'aria-label': 'Switch ' + t.id + (t.enabled ? ' off' : ' on'),
@@ -260,8 +403,10 @@
         var tr = el('tr', null,
           el('td', null, el('div', { class: 'row' }, el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) }), el('div', null, el('div', null, el('strong', { text: t.name })), el('div', { class: 'faint mono', text: '/' + t.id + '/' })))),
           el('td', null, sw),
-          el('td', { text: t.rights.length ? t.rights.join(', ') : '-' }),
-          el('td', { text: String(t.users) }),
+          el('td', null, declared(t) ? el('span', { class: 'badge success', text: 'Declared' }) : el('span', { class: 'badge warning', title: 'The tile has not run core.tile_declare yet', text: 'Not declared' }),
+            t.rights.length ? el('div', { class: 'faint', text: 'Rights: ' + t.rights.join(', ') }) : null,
+            t.containers ? el('div', { class: 'faint', text: t.containers + ' shared item' + (t.containers === 1 ? '' : 's') }) : null),
+          el('td', { text: t.users + (t.users === 1 ? ' person' : ' people') + (t.groups ? ', ' + t.groups + (t.groups === 1 ? ' group' : ' groups') : '') }),
           el('td', { text: t.admins.length ? t.admins.join(', ') : '-' }),
           el('td', { class: 'actions' },
             el('button', { class: 'btn small', type: 'button', text: 'Access', on: { click: function () { openAccess(t); } } }), ' ',
@@ -272,6 +417,7 @@
     }).catch(function (err) { fail(host, err); });
   }
   $('#tile-new').addEventListener('click', function () { tileForm(null); });
+  function declared(t) { return t.access && Object.keys(t.access).length > 0; }
 
   function tileForm(t) {
     var isNew = !t;
@@ -297,7 +443,11 @@
         el('div', { class: 'field grow' }, el('label', { for: 'tf-accent', text: 'Colour' }), accentSel, el('span', { class: 'hint', text: 'The tile\'s hue on the dashboard and inside it.' })),
         el('div', { class: 'field' }, el('label', { text: 'Preview' }), swatch)),
       field('order', 'Order', String(t.sort_order), 'Lower comes first on the dashboard.', { type: 'number', min: 0, max: 9999 }),
-      field('rights', 'Rights', t.rights.join(', '), 'Comma-separated, as declared in the tile\'s docs/TILE.md (e.g. edit, export). Removing one removes it from every user.', { autocapitalize: 'none', spellcheck: 'false' }),
+      declared(t)
+        ? el('div', { class: 'field' }, el('label', { text: 'Access' }),
+            el('p', { class: 'muted', text: 'Declared by the tile (levels, aliases' + (t.rights.length ? ', special rights ' + t.rights.join(', ') : '') + '). It changes only through the tile\'s own SQL file (core.tile_declare).' }),
+            el('input', { type: 'hidden', id: 'tf-rights', value: t.rights.join(', ') }))
+        : field('rights', 'Rights', t.rights.join(', '), 'Only until the tile declares itself (core.tile_declare). Comma-separated. Removing one removes it from every person and group.', { autocapitalize: 'none', spellcheck: 'false' }),
       err);
     Core.sheet({ title: isNew ? 'New tile' : 'Edit ' + t.name, body: body, actions: [
       { label: 'Cancel', value: false },
@@ -312,7 +462,7 @@
   }
 
   function openAccess(t) {
-    Core.sheet({ title: 'Access to ' + t.name, body: Access.panel(t, true), actions: [{ label: 'Done', value: true }] }).then(function () { loadTiles(); });
+    Core.sheet({ title: 'Access to ' + t.name, body: Access.panel(t.id), actions: [{ label: 'Done', value: true }] }).then(function () { loadTiles(); });
   }
 
   // ---------- audit ----------

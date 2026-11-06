@@ -11,6 +11,7 @@
     { "name": "007_tile_accent", "path": "db/core/007_tile_accent.sql" },
     { "name": "008_manage_users", "path": "db/core/008_manage_users.sql" },
     { "name": "009_tile_users", "path": "db/core/009_tile_users.sql" },
-    { "name": "010_health", "path": "db/core/010_health.sql" }
+    { "name": "010_health", "path": "db/core/010_health.sql" },
+    { "name": "011_access", "path": "db/core/011_access.sql" }
   ]
 }

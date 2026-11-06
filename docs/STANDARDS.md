@@ -31,9 +31,9 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 ## 3. Users and roles
 - Account = username + password, created by the super user (no email needed), or self-service with the user's own email address + password (Supabase Auth). Username: 3-30 characters, `a-z 0-9 . _ -`, lower case, unique; shown everywhere instead of the address. Display name. Nothing else personal.
 - Status: `pending` (requested), `active`, `disabled`. Only `active` users get anything.
-- **Super user** (the owner): approves accounts, creates and switches tiles, names tile admins, sees the audit.
-- **Tile admin:** gives and removes access and rights for his tile only.
-- **User:** sees his tiles; per-tile rights (e.g. `edit`, `reply`) are declared by each tile.
+- **Super user** (the owner): approves accounts, makes groups, creates and switches tiles, names managers (level manage), checks access, hands over, sees the audit.
+- **Manager of a tile** (level manage, "tile admin"): gives people and groups the levels read to approve on his tile, and opens every container in it.
+- **Everyone else:** one level per tile (read, contribute, edit, approve), own or through a group; what each level means in a tile is that tile's declaration (`docs/TILE-CONTRACT.md` section 5). Projects, maps, notebooks and the like are shared from their Access panel (`Core.share`).
 - Nothing is shown as locked: a user sees only what he may open. Tile taglines are neutral.
 - Sign-in, session and password rules: `docs/SECURITY.md` section 2.
 
@@ -47,7 +47,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 
 ## 5. Browser rules
 - Plain HTML, CSS, JS; no framework, bundler, CDN, external font or tracker. A library a tile truly needs (markdown, maths) is copied into the tile's `vendor/` with its licence.
-- Every page, in this order: CSP meta and `robots` noindex meta (`docs/SECURITY.md` section 4), then `/dame-hub/core/v1/theme.css`, `/dame-hub/core/v1/config.js`, `/dame-hub/core/v1/api.js`, `/dame-hub/core/v1/core.js`; `<html lang="en" data-loading>`; `<header id="topbar"></header>`; the guard first: `Core.requireLogin()`, `Core.requireLogin({ tile: 'hvac-notes' })`, `{ tile, right: 'edit' }`, `{ super: true }`.
+- Every page, in this order: CSP meta and `robots` noindex meta (`docs/SECURITY.md` section 4), then `/dame-hub/core/v1/theme.css`, `/dame-hub/core/v1/config.js`, `/dame-hub/core/v1/api.js`, `/dame-hub/core/v1/core.js`; `<html lang="en" data-loading>`; `<header id="topbar"></header>`; the guard first: `Core.requireLogin()`, `Core.requireLogin({ tile: 'hvac-notes' })`, `{ tile, level: 'approve' }`, `{ tile, right: 'edit' }`, `{ super: true }`. A **Share** button (opening `Core.share`) sits beside the title of every container page and on each row of its list, for the owner and managers; others may open it to see who has access.
 - Data only through `Api.rpc(name, params)` and `Api.file(...)`. They add the session, refresh it, and turn error codes into plain messages; `SIGNED_OUT` sends the user to `/dame-hub/?next=<path>`.
 - `textContent` / `Core.el()`, never `innerHTML` with data. No inline scripts or handlers.
 - `Core.sheet` and `Core.toast` instead of `alert` / `confirm` / `prompt`.
@@ -70,7 +70,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 
 ## 8. Testing
 - Playwright against `node dev/serve.mjs` (`http://localhost:8080/dame-hub/`) + the staging project.
-- `db/<schema>/tests.sql`, run on staging: for each function one allowed call and refused calls for signed out, pending, disabled, no tile, no right, another user's record.
+- `db/<schema>/tests.sql`, run on staging: for each function one allowed call and refused calls for signed out, pending, disabled, no tile, too low a level, a container not shared with him (`NOT_FOUND`), another user's record.
 - Demo accounts on staging only (`demo_admin`, `demo_user`, `demo_pending`, `demo_none`), from `db/core/seed-staging.sql`. Demo data is invented, never copied from real work.
 
 ## 9. Delivery (every project)

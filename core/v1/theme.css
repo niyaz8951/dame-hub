@@ -408,3 +408,21 @@ main, .page { padding-bottom: calc(var(--space-7) + env(safe-area-inset-bottom, 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
 }
+
+/* Access lists (Core.share, the access page, groups) */
+.plist { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.plist .pitem { display: flex; align-items: center; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plist .pitem .grow { min-width: 0; }
+.plist .pitem .n { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plist .pitem .u { display: block; color: var(--text-2); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plist .pitem select { width: auto; min-width: 112px; }
+.plist .pitem .chips { margin-top: 4px; }
+.avatar.group { background: var(--accent-soft); color: var(--accent); }
+.picks { display: flex; flex-direction: column; max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.picks button { text-align: left; padding: 8px 12px; background: none; border: 0; border-bottom: 1px solid var(--line); font: inherit; color: var(--text); cursor: pointer; }
+.picks button:hover, .picks button:focus-visible { background: var(--accent-soft); outline: none; }
+.picks .faint { padding: 8px 12px; }
+.lvl-legend { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--space-3); margin: 0; }
+.lvl-legend dt { font-weight: 600; }
+.lvl-legend dd { margin: 0; color: var(--text-2); }
+details > summary { cursor: pointer; color: var(--link); margin: var(--space-2) 0; }

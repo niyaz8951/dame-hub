@@ -1,4 +1,4 @@
-/* Access page for tile admins: /dame-hub/access.html?tile=<id> */
+/* Access page for the tile's managers: /dame-hub/access.html?tile=<id> */
 (function () {
   'use strict';
   var $ = Core.$;
@@ -9,6 +9,6 @@
     Core.setTitle('Access to ' + me.tile.name);
     $('#title').textContent = 'Access to ' + me.tile.name;
     $('#back').href = '/' + tile + '/';
-    $('#panel').appendChild(Access.panel(me.tile, me.is_super));
+    $('#panel').appendChild(Access.panel(me.tile.id));
   });
 })();

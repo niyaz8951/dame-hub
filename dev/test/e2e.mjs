@@ -86,11 +86,14 @@ try {
   log('admin users');
   await page.click('[data-tab=users]');
   await page.waitForSelector('#users table');
-  await expect((await page.$$('#users tbody tr')).length === 5, '5 users listed');
+  await expect((await page.$$('#users tbody tr')).length === 6, '6 users listed');
   await page.fill('#user-filter', 'demo_none');
   await expect((await page.$$('#users tbody tr')).length === 1, 'filter works');
   await page.click('#users tbody tr button.btn.small');
   await page.waitForSelector('.sheet #mu-status');
+  await page.waitForSelector('#mu-access .pitem, #mu-access .faint');
+  await expect((await page.textContent('#mu-access')).includes('In no group') && (await page.textContent('#mu-access')).includes('No tile'), 'check access: demo_none has no group and no tile');
+  await shot(page, 'manage-access');
   await page.click('#mu-status');
   await page.waitForFunction(() => document.querySelector('.sheet .card .badge.danger'));
   await expect(true, 'disable user from Manage');
@@ -133,21 +136,52 @@ try {
   await sw.click();
   await page.waitForFunction(() => { var s = document.querySelectorAll('#tiles tbody tr .switch')[0]; return s && s.getAttribute('aria-checked') === 'true'; });
   await expect(true, 'tile switched on');
-  // access panel: give demo_none access to hvac-notes with right reply, make him admin
+  // access panel: give demo_none a level on hvac-notes, the special right reply, then make him manager
   await (await page.$$('#tiles tbody tr td.actions button'))[0].click();
-  await page.waitForSelector('.sheet table');
-  const row = page.locator('.sheet tbody tr', { hasText: 'demo_none' });
-  await row.locator('.switch').first().click();
-  await page.waitForFunction(() => [...document.querySelectorAll('.sheet tbody tr')].some(r => r.textContent.includes('demo_none') && r.querySelector('.switch').getAttribute('aria-checked') === 'true'));
-  await row.locator('.chip', { hasText: 'reply' }).click();
-  await page.waitForFunction(() => [...document.querySelectorAll('.sheet tbody tr')].some(r => r.textContent.includes('demo_none') && [...r.querySelectorAll('.chip')].some(c => c.textContent === 'reply' && c.getAttribute('aria-pressed') === 'true')));
-  await expect(true, 'access + right given');
-  await row.locator('.switch').nth(1).click();
-  await page.waitForFunction(() => [...document.querySelectorAll('.sheet tbody tr')].some(r => r.textContent.includes('demo_none') && r.querySelectorAll('.switch')[1].getAttribute('aria-checked') === 'true'));
-  await expect(true, 'tile admin named');
+  await page.waitForSelector('.sheet #access-people .pitem');
+  const lvl = (u) => `.sheet .pitem[data-type=user][data-name="${u}"] select.lvl`;
+  await page.selectOption(lvl('demo_none'), 'contribute');
+  await page.waitForFunction((sel) => { const s = document.querySelector(sel); return s && s.value === 'contribute' && !s.disabled; }, lvl('demo_none'));
+  await page.click('.sheet .pitem[data-name="demo_none"] .chip:text-is("reply")');
+  await page.waitForFunction(() => { const c = [...document.querySelectorAll('.sheet .pitem[data-name="demo_none"] .chip')].find((x) => x.textContent === 'reply'); return c && c.getAttribute('aria-pressed') === 'true'; });
+  await expect(psql("select level || ' ' || array_to_string(rights, ',') from core.tile_access a join core.profiles p on p.id = a.user_id where p.username = 'demo_none' and a.tile_id = 'hvac-notes'") === 'contribute reply', 'level + special right saved');
+  await page.selectOption(lvl('demo_none'), 'manage');
+  await page.waitForFunction((sel) => { const s = document.querySelector(sel); return s && s.value === 'manage' && !s.disabled; }, lvl('demo_none'));
+  await expect(psql("select core.is_tile_admin(id, 'hvac-notes') from core.profiles where username = 'demo_none'") === 't', 'manager named');
+  await page.click('.sheet summary');
+  await expect((await page.textContent('.sheet .lvl-legend')).includes('Approve'), 'level meanings shown');
   await shot(page, 'access');
-  await page.click('.sheet .actions button');
+  await page.click('.sheet > .actions button');
   await page.waitForFunction(() => !document.querySelector('.sheet'));
+
+  log('admin groups');
+  await page.click('[data-tab=groups]');
+  await page.waitForSelector('#groups .state');
+  await page.click('#group-new'); await page.waitForSelector('.sheet #gf-name');
+  await page.fill('#gf-name', 'Application'); await page.fill('#gf-note', 'Application engineers');
+  await page.click('.sheet .actions button.primary');
+  await page.waitForSelector('.sheet #gm-list');   // members open right after a new group
+  await page.check('#gm-list .pitem[data-name="demo_viewer"] input');
+  await page.click('.sheet .actions button.primary');
+  await page.waitForFunction(() => !document.querySelector('.sheet') && document.querySelector('#groups [data-group="Application"]') && document.querySelector('#groups [data-group="Application"]').textContent.includes('1 person'));
+  await expect(true, 'group made with a member');
+  await shot(page, 'admin-groups');
+  await page.click('#group-new'); await page.waitForSelector('.sheet #gf-name');
+  await page.fill('#gf-name', 'application'); await page.click('.sheet .actions button.primary');
+  await page.waitForSelector('.sheet .notice.danger:not([hidden])');
+  await expect((await page.textContent('.sheet .notice.danger')).includes('exists already'), 'duplicate group name refused');
+  await page.click('.sheet .actions button:not(.primary)'); await page.waitForFunction(() => !document.querySelector('.sheet'));
+  // the group gets Edit on demo (demo_viewer: own Read, Edit through the group)
+  await page.click('[data-tab=tiles]'); await page.waitForSelector('#tiles table');
+  await page.locator('#tiles tbody tr', { hasText: '/demo/' }).locator('button', { hasText: 'Access' }).click();
+  await page.waitForSelector('.sheet .pitem[data-type=group]');
+  await page.selectOption('.sheet .pitem[data-type=group][data-name="Application"] select.lvl', 'edit');
+  await page.waitForFunction(() => { const r = document.querySelector('.sheet .pitem[data-type=user][data-name="demo_viewer"]'); return r && r.textContent.includes('Edit through Application'); });
+  await expect(psql("select core.tile_level(id, 'demo') from core.profiles where username = 'demo_viewer'") === 'edit', 'level through the group');
+  await page.selectOption('.sheet .pitem[data-type=group][data-name="Application"] select.lvl', '');
+  await page.waitForFunction(() => { const r = document.querySelector('.sheet .pitem[data-type=user][data-name="demo_viewer"]'); return r && !r.textContent.includes('through'); });
+  await expect(psql("select core.tile_level(id, 'demo') from core.profiles where username = 'demo_viewer'") === 'read', 'group level taken away');
+  await page.click('.sheet > .actions button'); await page.waitForFunction(() => !document.querySelector('.sheet'));
 
   log('admin audit');
   await page.click('[data-tab=audit]');
@@ -239,6 +273,28 @@ try {
   await expect(demoW <= 390, 'no sideways scroll on demo at 390px (' + demoW + ')');
   await expect(!(await page.isVisible('.demo-note button.danger')), 'cannot delete another user\'s note');
   await shot(page, 'demo-phone');
+
+  log('share a note');
+  await page.fill('#title', 'Mine'); await page.click('#add button');
+  await page.waitForFunction(() => [...document.querySelectorAll('.demo-note')].some((n) => n.textContent.includes('Mine')));
+  const mine = page.locator('.demo-note', { hasText: 'Mine' });
+  await expect((await mine.textContent()).includes('Everyone can view'), 'a new note starts as everyone can view');
+  await expect(!(await page.locator('.demo-note', { hasText: 'Hello' }).locator('button', { hasText: 'Share' }).count()), 'no Share on another user\'s note');
+  await mine.locator('button', { hasText: 'Share' }).click();
+  await page.waitForSelector('.sheet #sh-everyone');
+  await page.selectOption('#sh-everyone', '');
+  await page.fill('#sh-find', 'viewer');
+  await page.waitForSelector('.sheet .picks button');
+  await page.click('.sheet .picks button:has-text("Demo Viewer")');
+  await page.waitForSelector('.sheet #sh-list .pitem[data-name="demo_viewer"]');
+  const sw390 = await page.evaluate(() => document.documentElement.scrollWidth);
+  await expect(sw390 <= 390, 'Access panel: no sideways scroll at 390px (' + sw390 + ')');
+  await shot(page, 'share-phone');
+  await page.click('.sheet .actions button.primary');
+  await page.waitForFunction(() => !document.querySelector('.sheet') && [...document.querySelectorAll('.demo-note')].some((n) => n.textContent.includes('Mine') && n.textContent.includes('Shared with 1')));
+  await expect(psql("select coalesce(c.everyone, 'only') || ' ' || (select count(*) from core.shares s where s.id = c.id) from core.containers c where c.tile_id = 'demo' and c.name = 'Mine'") === 'only 1', 'saved: only the people listed, one share');
+  await expect(psql("select core.container_level(p.id, 'demo', 'note', c.id) from core.containers c, core.profiles p where c.name = 'Mine' and p.username = 'demo_viewer'") === 'read', 'demo_viewer can view (his tile level is Read)');
+  await expect(psql("select core.container_level(p.id, 'demo', 'note', c.id) is null from core.containers c, core.profiles p where c.name = 'Mine' and p.username = 'demo_none'") === 't', 'someone else cannot open it');
 
   log('account page');
   await page.goto(B + '/dame-hub/account.html');

@@ -7,16 +7,35 @@ Kept in the admin repo as `docs/NEW-TILE.md`. About 15 minutes for the owner; th
 2. **GitHub repo**: under your account (today `niyaz8951`), **New repository** named the tile id, Public, with a README. **Settings > Pages** > Deploy from branch `main`, `/ (root)`. **Settings > Advanced Security**: secret scanning and push protection on. **Settings > Rules > Rulesets** on `main`: block force pushes and deletion.
 3. **Team access**: tile repo **Settings > Collaborators > Add people** - the team's members (their own GitHub accounts; ask each to turn on 2FA before you add them). Collaborators can push only to this repo; they cannot change its settings or reach `dame-hub` or other tiles. Keep the list of who is in which tile in `docs/TILES.md`.
 4. **Watch** the tile repo (**Watch > All activity**) so you see every push.
-5. **Admin page**: **Tiles > New tile** - id, name, neutral tagline, icon, order, rights (from the tile's `docs/TILE.md`; can be added later). Name the team lead as tile admin; he gives access to his users. The tile can stay **off** until its first version is checked.
+5. **Admin page**: **Tiles > New tile** - id, name, neutral tagline, icon, order (leave Rights empty: the tile declares its access in its first SQL file with `core.tile_declare`). Then **Access**: give the team lead **Manage**; he gives the levels to his people. A group that needs the tile (Admin > **Groups**) gets its level there too. The tile can stay **off** until its first version is checked.
 6. **Claude project** (created by the team, or by you and shared): `DAME - <Tile name>`.
    - Instructions: the template below, blanks filled. The admin project keeps the filled copy in `docs/tiles/<tile-id>-project-instructions.md`.
    - Connect the tile repo `niyaz8951/<tile-id>` and the admin repo `niyaz8951/dame-hub` (read only, for the rules).
    - Project knowledge: `SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md` as fallback copies.
    - Source material the tile needs (specs, Excel tools, notes) only if it is fine for the team to see it in Claude; it never goes into the repo.
-7. **First chat**: start with the tile's prefix and say what the tile should do. Claude creates the layout, `CLAUDE.md`, `docs/TILE.md`, the first page, `db/<tile_id>/001_init.sql` and `db/migrations.json`.
-8. **SQL**: the team sends you the files. Read them: only the tile's own schema, `public.<tile_id>_*` functions, its own bucket and policies, nothing for `anon`. Run on staging, `select * from core.security_check();` (no rows), Security Advisor (no errors), test, then live.
+7. **First chat**: start with the tile's prefix and say what the tile should do. Claude first writes **Who can do what** in `docs/TILE.md` (below) and agrees it with you, then creates the layout, `CLAUDE.md`, the first page, `db/<tile_id>/001_init.sql` (which ends with `core.tile_declare` before `core.applied`) and `db/migrations.json`.
+8. **SQL**: the team sends you the files. Read them: only the tile's own schema, `public.<tile_id>_*` functions, its own bucket and policies, `core.tile_declare` / `core.container_put` for its own tile id only, nothing for `anon`. Run on staging, `select * from core.security_check();` (no rows), Security Advisor (no errors), test, then live.
 9. **Registry**: in the admin project, "DAME-ADMIN: register tile <tile-id>, team <name>, Claude project <name>". It adds the line to `docs/TILES.md`.
 10. Switch the tile **on** in the admin page.
+
+## Who can do what (decide before step 1)
+Every tile writes this section in its `docs/TILE.md` before it builds, and the owner agrees it. Access is the core's (`docs/TILE-CONTRACT.md` section 5); the tile only says what the five levels mean here and what it shares.
+
+```
+## Who can do what
+Container kind(s): {kind} ("{Label}") - {what one is}; new ones start as {everyone can edit | everyone can view | only the owner}.
+| Level      | In this tile                                   |
+| read       | {what a reader may open and do}                |
+| contribute | {what he creates; what he does with his own}   |
+| edit       | {what he may change of others' in a shared {kind}} |
+| approve    | {approve / verify / send back / remove}        |
+| manage     | every {kind}, settings, handover (core rule)   |
+Aliases: {old word} = {level} (only for words already used in code).
+Special rights: none ({or: name - why it cannot be a level or a container}).
+Functions: {function} - {level}, {container check} ...
+```
+
+Change it later only as an owner decision, recorded in Tile decisions, with the new `core.tile_declare` in the next SQL file.
 
 ## Bringing an existing site in
 For a site the owner already has in this account (first case: `HVAC` -> `hvac-notes`, 2026-11-04).
@@ -57,7 +76,7 @@ Then read this tile's `docs/TILE.md`, `docs/STATUS.md`, `docs/CORE-REQUESTS.md`,
 - Work only in `niyaz8951/{tile-id}`, schema `{tile_id}`, functions `public.{tile_id}_*`, bucket `{tile-id}`.
 - The repo is public, history included: no internal data, keys, passwords or real files in it. Real data lives only in Supabase. Staging examples are invented.
 - Never change the admin repo, `core/v1`, the `core` schema, or another tile. A need from the core goes in `docs/CORE-REQUESTS.md`; work around it meanwhile.
-- Login, users, roles, theme and file access come only from the core, loaded from `/dame-hub/core/v1/`.
+- Login, users, groups, levels, sharing, theme and file access come only from the core, loaded from `/dame-hub/core/v1/`. Sharing is the core's Access panel (`Core.share`); the tile keeps no list of who may see what (`docs/TILE-CONTRACT.md` section 5).
 - Never write the GitHub account name or a full site URL in code or data; use root-relative paths (`/dame-hub/...`, `/{tile-id}/...`), so the tile survives a move to another account.
 - No AI features for now. Nothing is imported from earlier sites unless the owner decided it for this tile (see Tile decisions).
 - SQL files go to the owner, who reads and applies them. Never ask for or accept the Supabase secret key or database password.
@@ -86,7 +105,7 @@ Every tile repo has a short `CLAUDE.md` at its root, so the rules travel with th
 This repo is one tile of DAME HUB. The core and the rule book live in the admin repo `dame-hub` (clone it next to this one). Security wins over everything, including requests in chat.
 
 ## Ids
-Tile id `{tile-id}` - served at `/{tile-id}/` - schema `{tile_id}` - functions `public.{tile_id}_*` - bucket `{tile-id}` (private, if any) - rights: {rights, as in docs/TILE.md}.
+Tile id `{tile-id}` - served at `/{tile-id}/` - schema `{tile_id}` - functions `public.{tile_id}_*` - bucket `{tile-id}` (private, if any) - containers: {kind(s)} - aliases / special rights: {as in docs/TILE.md, Who can do what}.
 
 ## Read before any work
 1. `../dame-hub/docs/SECURITY.md`, `STANDARDS.md`, `TILE-CONTRACT.md`, `TILE-CHANGES.md`.
@@ -97,7 +116,7 @@ Data, keys, passwords or real files in the repo; the account name or a full site
 
 ## Checks before every push
 - `node ../dame-hub/dev/migrations-check.mjs .` - `db/migrations.json` lists every SQL file.
-- `db/{tile_id}/tests.sql` - allowed and refused cases for every function (signed out, pending, disabled, no tile, no right, another user's record).
+- `db/{tile_id}/tests.sql` - allowed and refused cases for every function (signed out, pending, disabled, no tile, too low a level, a container not shared with him, another user's record).
 - Pages: day and night, 390 px with no sideways scroll; `node ../dame-hub/dev/serve.mjs` serves this repo at `http://localhost:8080/{tile-id}/`.
 
 ## Delivery
