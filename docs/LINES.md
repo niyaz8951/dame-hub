@@ -49,3 +49,4 @@ One short line in the dashboard hero, in place of the old tile count. A new one 
 
 ## Log
 - 2026-11-05: 76 lines (first batch).
+- 2026-11-09: +28 (history 8, rule 8, fact 6, quote 3, news 3), -0 expired. 104 lines.
