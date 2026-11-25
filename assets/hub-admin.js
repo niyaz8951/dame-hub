@@ -401,7 +401,9 @@
           } } });
         var icon = Core.ICONS.indexOf(t.icon) >= 0 ? t.icon : 'tile';
         var tr = el('tr', null,
-          el('td', null, el('div', { class: 'row' }, el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) }), el('div', null, el('div', null, el('strong', { text: t.name })), el('div', { class: 'faint mono', text: '/' + t.id + '/' })))),
+          el('td', null, el('div', { class: 'row' }, el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) }), el('div', null, el('div', null, el('strong', { text: t.name })), el('div', { class: 'faint mono', text: Core.tilePath(t) }),
+            t.hosting === 'upload' ? el('div', { class: 'faint' }, el('span', { class: 'badge brand', text: 'Uploaded' }), ' ',
+              t.live ? 'live: version ' + t.live.id + ', ' + Core.date(t.live.live_at) : 'nothing live yet', t.preview ? '; preview waiting' : '') : null))),
           el('td', null, sw),
           el('td', null, declared(t) ? el('span', { class: 'badge success', text: 'Declared' }) : el('span', { class: 'badge warning', title: 'The tile has not run core.tile_declare yet', text: 'Not declared' }),
             t.rights.length ? el('div', { class: 'faint', text: 'Rights: ' + t.rights.join(', ') }) : null,
@@ -409,6 +411,7 @@
           el('td', { text: t.users + (t.users === 1 ? ' person' : ' people') + (t.groups ? ', ' + t.groups + (t.groups === 1 ? ' group' : ' groups') : '') }),
           el('td', { text: t.admins.length ? t.admins.join(', ') : '-' }),
           el('td', { class: 'actions' },
+            t.hosting === 'upload' ? el('a', { class: 'btn small', href: Core.CORE + '/upload.html?tile=' + encodeURIComponent(t.id), text: 'Files' }) : null, t.hosting === 'upload' ? ' ' : null,
             el('button', { class: 'btn small', type: 'button', text: 'Access', on: { click: function () { openAccess(t); } } }), ' ',
             el('button', { class: 'btn small', type: 'button', text: 'Edit', on: { click: function () { tileForm(t); } } })));
         body.appendChild(tr);
@@ -421,7 +424,7 @@
 
   function tileForm(t) {
     var isNew = !t;
-    t = t || { id: '', name: '', tagline: '', icon: 'tile', accent: 'blue', sort_order: 100, rights: [] };
+    t = t || { id: '', name: '', tagline: '', icon: 'tile', accent: 'blue', sort_order: 100, rights: [], hosting: 'repo' };
     function field(id, label, value, hint, attrs) {
       var input = el('input', Object.assign({ id: 'tf-' + id, value: value }, attrs || {}));
       return el('div', { class: 'field' }, el('label', { for: 'tf-' + id, text: label }), input, hint ? el('span', { class: 'hint', text: hint }) : null);
@@ -430,12 +433,15 @@
     Core.ICONS.forEach(function (i) { iconSel.appendChild(el('option', { value: i, text: i, selected: i === t.icon })); });
     var accentSel = el('select', { id: 'tf-accent' });
     Core.ACCENTS.forEach(function (c) { accentSel.appendChild(el('option', { value: c, text: c, selected: c === t.accent })); });
+    var hostSel = el('select', { id: 'tf-hosting' },
+      el('option', { value: 'repo', text: 'Built in its own repo (a tile team with its Claude project)', selected: t.hosting !== 'upload' }),
+      el('option', { value: 'upload', text: 'Uploaded from the site (HTML, CSS, JS files; Files page)', selected: t.hosting === 'upload' }));
     var swatch = el('span', { class: 'icon i-' + t.icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) });
     function preview() { swatch.className = 'icon i-' + iconSel.value; swatch.setAttribute('data-accent', accentSel.value); }
     iconSel.addEventListener('change', preview); accentSel.addEventListener('change', preview);
     var err = el('p', { class: 'notice danger', hidden: true });
     var body = el('div', null,
-      field('id', 'Tile id', t.id, 'Lower case, digits and dashes; the repo name and the path /<tile-id>/. Cannot change later.', { maxlength: 30, disabled: !isNew, autocapitalize: 'none', spellcheck: 'false' }),
+      field('id', 'Tile id', t.id, 'Lower case, digits and dashes; the repo (or folder) name and the path. Cannot change later.', { maxlength: 30, disabled: !isNew, autocapitalize: 'none', spellcheck: 'false' }),
       field('name', 'Name', t.name, null, { maxlength: 40 }),
       field('tagline', 'Tagline', t.tagline, 'Neutral, one line.', { maxlength: 80 }),
       el('div', { class: 'row' },
@@ -443,6 +449,8 @@
         el('div', { class: 'field grow' }, el('label', { for: 'tf-accent', text: 'Colour' }), accentSel, el('span', { class: 'hint', text: 'The tile\'s hue on the dashboard and inside it.' })),
         el('div', { class: 'field' }, el('label', { text: 'Preview' }), swatch)),
       field('order', 'Order', String(t.sort_order), 'Lower comes first on the dashboard.', { type: 'number', min: 0, max: 9999 }),
+      el('div', { class: 'field' }, el('label', { for: 'tf-hosting', text: 'Files' }), hostSel,
+        el('span', { class: 'hint', text: 'Uploaded: the tile\'s managers upload the files on the Files page; they go to dame-hub/<tile-id>/ and the tile opens at /dame-hub/<tile-id>/. Own repo: the tile opens at /<tile-id>/.' })),
       declared(t)
         ? el('div', { class: 'field' }, el('label', { text: 'Access' }),
             el('p', { class: 'muted', text: 'Declared by the tile (levels, aliases' + (t.rights.length ? ', special rights ' + t.rights.join(', ') : '') + '). It changes only through the tile\'s own SQL file (core.tile_declare).' }),
@@ -455,7 +463,8 @@
         var params = { p_id: isNew ? body.querySelector('#tf-id').value : t.id, p_name: body.querySelector('#tf-name').value,
           p_tagline: body.querySelector('#tf-tagline').value, p_icon: iconSel.value, p_accent: accentSel.value,
           p_sort_order: parseInt(body.querySelector('#tf-order').value, 10) || 100,
-          p_rights: body.querySelector('#tf-rights').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean) };
+          p_rights: body.querySelector('#tf-rights').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+          p_hosting: hostSel.value };
         return Api.rpc('core_admin_tile_save', params).then(function () { Core.toast('Saved', 'success'); loadTiles(); return true; },
           function (ex) { err.textContent = Api.errorMessage(ex); err.hidden = false; return false; });
       } }] });
@@ -499,7 +508,8 @@
   function sqlState(applied, tiles) {
     var ran = {};
     applied.forEach(function (m) { ran[m.repo + '/' + m.name] = m.applied_at; });
-    var repos = [{ id: 'dame-hub', name: 'Core', base: '/dame-hub/' }].concat(tiles.map(function (t) { return { id: t.id, name: t.name, base: Core.tilePath(t.id) }; }));
+    var repos = [{ id: 'dame-hub', name: 'Core', base: '/dame-hub/' }].concat(tiles.filter(function (t) { return t.hosting !== 'upload'; })
+      .map(function (t) { return { id: t.id, name: t.name, base: Core.tilePath(t) }; }));
     return Promise.all(repos.map(function (r) { return getList(r.base); })).then(function (lists) {
       return repos.map(function (r, i) {
         var list = lists[i], repo = list ? list.repo : r.id;

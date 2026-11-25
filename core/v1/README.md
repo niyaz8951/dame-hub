@@ -69,6 +69,7 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 | `Core.setTitle(text)`, `Core.param(name)`, `Core.go(path)` | Title, query parameter, navigation. |
 | `Core.signOut()` | Ends the session everywhere and goes to the sign-in page. |
 | `Core.install.ready()`, `Core.install.standalone()`, `Core.install.show()` | The installed app: whether the browser can install right now, whether the page already runs inside the app, and the "Install app" sheet (a tile never needs these; the account menu has the item). |
+| `Core.tilePath(tile)` | Where a tile opens: `/<id>/`, or `/dame-hub/<id>/` for tiles inside the admin repo and uploaded tiles. Pass the row (`core_my_tiles`, `core_admin_tiles`, `Core.tile`); a bare id knows only `INSIDE_CORE`. |
 | `Core.ICONS` | Icon names a tile may use: `tile notes chart tools users folder book calc gear shield wind check map`. |
 
 ## Api
@@ -80,6 +81,7 @@ Core.requireLogin({ tile: 'hvac-notes' }).then(function (me) { /* build the page
 | `Api.file.download(bucket, path)` | Promise of a Blob. |
 | `Api.file.list(bucket, prefix)` | Objects under a prefix. |
 | `Api.file.remove(bucket, path)` | Delete. |
+| `Api.fn(name, body)` | Calls the Edge Function `name` (POST, JSON or a `FormData`) with the session; resolves to its `{ ok: true, ... }` or rejects with `{ code, message, raw }`. Today only `tile-upload` (core pages). |
 | `Api.errorMessage(err)` | Plain message for any error. |
 | `Api.auth.*` | Used by the core pages only. |
 
@@ -88,3 +90,6 @@ Tokens: `--brand --brand-strong --brand-soft --on-brand --bg --surface --surface
 Classes: `.icon.i-<name> .card .btn(.primary .danger .ghost .small .block) .field .hint .error .check .switch .table-wrap .badge(.brand .success .warning .danger) .chip .chips .notice(.success .warning .danger .brand) .state .tabs .tiles .tile .icon.<name> .row .stack .page-head .narrow .muted .faint .mono`; since 2026-11-04 also `.hero` (gradient band: `.kicker`, `h1`, `.sub`), `.section-title`, `.btn.glass` (button on a hero), `.btn .ico.i-<name>` (icon in a button), `.avatar`, `.tile.skeleton` with `.sk.ic .sk.l1 .sk.l2` (loading placeholders), `.auth` + `.brand-block` (sign-in layout). Icon classes work as `.i-<name>` on `.icon` or `.ico`.
 Tile accents (2026-11-04): every tile has one hue from the core palette, set in Admin > Tiles > Colour: `blue` (default = DAME brand), `teal`, `green`, `orange`, `violet`, `rose`, `slate`. The core puts `data-accent="<name>"` on `<html>` when a tile page loads (from `core_me`) and on each dashboard card. Tokens: `--accent --accent-2 --accent-strong --accent-soft --on-accent --accent-grad --accent-glow --accent-ring`, day and night. Components that follow the accent: `.btn.primary`, `.tabs` selected, `.chip` pressed, `.badge.accent` (= `.badge.brand`), `.notice.accent`, `.icon`, `.tile`, input focus, `.progress` (bar: `<div class="progress"><span></span></div>`, width set from JS), `.cover` (filled block). The topbar, mark, hero and avatar stay brand blue on every page. A tile may put `data-accent` on one element (a section, a card, a cover) to use another hue from the palette there; it never writes a colour value. `Core.ACCENTS`, `Core.accent(name)`, `Core.setAccent(name, node)`.
 Palette: Daikin Middle East (`--brand #0097E0`, `--brand-sky #54C3F1`, `--brand-navy #0B2A4A`). Night mode follows the device; the round sun/moon button in the topbar overrides it (stored in `localStorage` as `dame.theme`) with a circular reveal where the browser supports View Transitions, a short fade elsewhere, nothing with reduced motion. `Core.themeToggle(event)`, `Core.isNight()`, `Core.initials(name)`.
+
+## Uploaded tiles
+Pages of an uploaded tile (`docs/STANDARDS.md` section 13) do not use the head block above: `tile-upload` writes theirs. It loads `uploaded.css` (the bar and the gate, nothing global) and, without `defer`, `config.js`, `api.js` and `uploaded.js` (applies `style=""` through the CSSOM, binds the handlers in `_dame/js/<page>-on.js`, the guard, the DAME bar). `core.js` and `theme.css` are not loaded there, so the tool keeps its own look. Changing `uploaded.js` or `uploaded.css` changes every uploaded tile at once.

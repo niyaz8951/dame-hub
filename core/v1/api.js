@@ -228,7 +228,33 @@ window.Api = (function () {
     }
   };
 
-  return { auth: auth, rpc: rpc, file: file, Error: ApiError, messages: MESSAGES,
+  // Edge Functions (today only tile-upload): POST JSON or a FormData with the session; the function answers
+  // { ok: true, ... } or { ok: false, code, message, notes }. Rejects with { code, message, status, raw }.
+  function fn(name, body, _retried) {
+    return ensureFresh().then(function () {
+      var s = getSession();
+      if (!s) throw new ApiError('SIGNED_OUT', MESSAGES.SIGNED_OUT);
+      var isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+      var h = { 'apikey': apikey, 'Authorization': 'Bearer ' + s.access_token };
+      if (!isForm) h['Content-Type'] = 'application/json';
+      return fetch(base + '/functions/v1/' + name, { method: 'POST', headers: h, body: isForm ? body : JSON.stringify(body || {}) })
+        .catch(function () { throw new ApiError('NETWORK', MESSAGES.NETWORK); })
+        .then(function (res) {
+          return parseBody(res).then(function (b) {
+            var code = b && b.code;
+            if (res.status === 401 && code === 'SIGNED_OUT' && !_retried) return auth.refresh().then(function () { return fn(name, body, true); });
+            if (!res.ok || (b && b.ok === false)) {
+              if (!code) code = res.status === 404 ? 'NOT_FOUND' : res.status === 401 ? 'SIGNED_OUT' : 'SERVER';
+              var own = ['SIGNED_OUT', 'NOT_APPROVED', 'NO_ACCESS', 'NO_RIGHT'].indexOf(code) >= 0;
+              throw new ApiError(code, own || !(b && b.message) ? messageFor(code, b && b.message) : b.message, res.status, b);
+            }
+            return b;
+          });
+        });
+    });
+  }
+
+  return { auth: auth, rpc: rpc, fn: fn, file: file, Error: ApiError, messages: MESSAGES,
     errorMessage: function (err) {
       if (!err) return MESSAGES.UNKNOWN;
       if (err instanceof ApiError) return err.message || messageFor(err.code);

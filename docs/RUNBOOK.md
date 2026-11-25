@@ -64,7 +64,29 @@ update core.profiles set is_super = false where username = 'name'; -- remove
 ## Switch a tile off / on
 Admin page > Tiles > the switch. Off: the tile disappears from every dashboard and every `public.<tile>_*` function refuses with `NO_ACCESS`. Use it the moment a tile breaks a rule.
 
+## Uploaded tiles: set up once (owner, about 15 minutes)
+1. **Apply `db/core/012_uploads.sql`** (Apply a SQL file, above), then Admin > Health > Run check now: Clean.
+2. **GitHub token**: GitHub > Settings > Developer settings > Personal access tokens > **Fine-grained tokens** > Generate new token. Name `dame-upload`, expiration 1 year (diary reminder), Resource owner your account, **Only select repositories: `dame-hub`**, Permissions > Repository > **Contents: Read and write** (Metadata read-only is added by itself). Generate and copy it. Never paste it anywhere but step 3.
+3. **Supabase > Edge Functions > Secrets** (project `dame-hub`): add
+   - `DAME_GITHUB_TOKEN` = the token
+   - `DAME_GITHUB_REPO` = `<account>/dame-hub` (today `niyaz8951/dame-hub`)
+   - `DAME_SITE_ORIGINS` = `https://<account>.github.io` (today `https://niyaz8951.github.io`; add `,http://localhost:8080` only while testing locally)
+4. **Deploy the function** `tile-upload`, its three files from `supabase/functions/tile-upload/` (`index.ts`, `handler.ts`, `convert.ts`):
+   - Dashboard: Edge Functions > Deploy a new function > Via editor, name `tile-upload`, create the three files with the same names and paste each from the repo, Deploy. Or with the Supabase CLI from a clone of `dame-hub`: `supabase functions deploy tile-upload --no-verify-jwt --project-ref <project-ref>`.
+   - Then the function's **Details > Enforce JWT verification: off** (the CLI flag does the same). The function checks the session itself, with the database, before it reads anything (`handler.ts`).
+5. **Check**: Admin > Tiles > Edit a test tile (or PMO) > Files: *Uploaded from the site*, give yourself Manage, open it from the dashboard, upload one `index.html`, wait a minute, Open the preview, Make live. GitHub shows two commits named `<tile>: ...` in `dame-hub`.
+If `main` ever gets a ruleset that requires pull requests, uploads stop (the function pushes to `main`): add the token's account to the ruleset's bypass list, or keep that rule off `main`.
+
+## Uploaded tiles: day to day
+- **Who uploads**: the tile's managers (Admin > Tiles > Access, level Manage). The Files page: dashboard tile while nothing is live, the DAME bar's **Files**, Admin > Tiles > **Files**.
+- **A preview shows 404**: GitHub Pages builds after each commit, about a minute; reload. A Pages build that failed shows on GitHub > `dame-hub` > Actions.
+- **"Uploads are not set up yet" / "GitHub refused the token"**: a secret is missing or the token expired: make a new token (set up step 2) and replace `DAME_GITHUB_TOKEN`.
+- **Undo**: Files > Versions > **Restore** on the version wanted. Discarded previews and old versions stay in git history.
+- **Stop uploads at once**: revoke the token on GitHub (or delete the secret). Tiles already live keep working. To take one tool down: switch the tile off.
+- **A tool moves to a repo** (it needs data, or a team takes it over): new repo `<tile-id>` with the files of `dame-hub/<tile-id>/` as the start, Admin > Tiles > Edit > Files: *Built in its own repo*, then delete the folder `dame-hub/<tile-id>/` in GitHub.
+
 ## Rotate a key
+- Upload token: make a new fine-grained token (Uploaded tiles, step 2), replace `DAME_GITHUB_TOKEN` in Supabase, then delete the old token on GitHub.
 - **Publishable key** (public): Supabase > Project Settings > API Keys > create a new one, put it in `core/v1/config.js`, push, then disable the old one. Nothing else changes.
 - **Secret / service_role key** or the **database password**: rotate in the dashboard at once if it was ever shown anywhere. DAME never uses them, so nothing in the repos changes. Tell the admin project so `docs/STATUS.md` records the date.
 

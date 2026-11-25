@@ -1,0 +1,32 @@
+/* DAME core: the only core styles an uploaded tile page loads (docs/STANDARDS.md section 13). Everything here is
+   scoped to #up-bar and #up-gate, so the uploaded tool keeps its own look. theme.css is not loaded on these pages. */
+html[data-up-locked] body > *:not(#up-bar):not(#up-gate) { visibility: hidden !important; }
+
+#up-bar, #up-gate { all: initial; box-sizing: border-box; font: 500 14px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0B2540; -webkit-font-smoothing: antialiased; }
+#up-bar *, #up-gate * { all: unset; box-sizing: border-box; }
+
+#up-bar { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; position: relative; z-index: 2147483000;
+  padding: calc(6px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));
+  background: #F3F7FA; border-bottom: 1px solid #D5E1EA; }
+#up-bar .up-home { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; color: #0B2540; cursor: pointer; text-decoration: none; }
+#up-bar .up-home img { display: block; width: 20px; height: 20px; }
+#up-bar .up-sep { color: #7A8FA3; }
+#up-bar .up-here { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+#up-bar .up-badge { padding: 2px 8px; border-radius: 999px; background: #FFF1D6; color: #7A4B00; font-size: 12px; font-weight: 650; white-space: nowrap; }
+#up-bar .up-grow { flex: 1 1 auto; }
+#up-bar .up-link { padding: 6px 12px; border: 1px solid #C3D3DF; border-radius: 8px; background: #FFFFFF; color: #0B2540; cursor: pointer; white-space: nowrap; }
+#up-bar a:focus-visible, #up-gate a:focus-visible { outline: 2px solid #0A7BC2; outline-offset: 2px; }
+#up-bar.night { background: #061426; color: #E6EEF5; border-bottom-color: #16314A; }
+#up-bar.night .up-home { color: #E6EEF5; }
+#up-bar.night .up-link { background: #0C2238; border-color: #24435F; color: #E6EEF5; }
+#up-bar.night .up-badge { background: #4A3410; color: #FFD892; }
+@media (max-width: 420px) { #up-bar .up-home span { display: none; } }
+
+#up-gate { display: block; max-width: 480px; margin: 18vh auto 0; padding: 28px 24px; text-align: center; background: #FFFFFF;
+  border: 1px solid #D5E1EA; border-radius: 14px; }
+#up-gate h2 { display: block; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+#up-gate p { display: block; color: #3C566E; margin-bottom: 18px; }
+#up-gate a { display: inline-block; padding: 8px 16px; border-radius: 8px; background: #0A7BC2; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+#up-gate.night { background: #0C2238; border-color: #24435F; color: #E6EEF5; }
+#up-gate.night p { color: #A9BCCD; }

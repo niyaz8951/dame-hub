@@ -10,6 +10,7 @@ An internal team site. Users sign in with their email address and password, wait
 ```
 https://<account>.github.io/dame-hub/    admin repo <account>/dame-hub   (sign in, dashboard, admin, core/v1)
 https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one per tile, one team)
+https://<account>.github.io/dame-hub/<tile-id>/   uploaded tile: files uploaded from the site into dame-hub/<tile-id>/ (section 13)
    today <account> = niyaz8951
                 |
         Supabase project "dame-hub"      (a separate staging project is added when the team starts using the site)
@@ -25,6 +26,7 @@ https://<account>.github.io/<tile-id>/   tile repo <account>/<tile-id>   (one pe
 - **No account name anywhere in code or data.** The core is always at `/dame-hub/`, tiles at `/<tile-id>/`. Pages use root-relative paths (`/dame-hub/core/v1/core.js`, `/<tile-id>/page.html`); the database stores tile ids, never URLs. Moving to another account is a repo transfer (`docs/MOVE-ACCOUNT.md`).
 - **Environments:** `core/v1/config.js` has a `LIVE` and a `STAGING` entry and uses `STAGING` when the host is `localhost`. Until a staging project exists, `STAGING` points at the same project as `LIVE` (see `docs/STATUS.md`); once it exists, only `config.js` changes. Claude never tests against the live project once the team uses the site.
 - **Tiles inside the admin repo:** a tile the owner keeps in `dame-hub` itself (today `demo`, `tools`) lives in the folder `dame-hub/<tile-id>/` and is served at `/dame-hub/<tile-id>/`. `core/v1/config.js` lists these ids in `INSIDE_CORE`; `Core.tilePath(id)` gives the path and the dashboard uses it. Everything else about the tile (id, guard, schema, bucket, docs) is the same as for a sibling repo; such a tile is run by the owner and the admin project, and can move out to its own repo later by removing it from `INSIDE_CORE`.
+- **Uploaded tiles** (owner, 2026-11-25): `core.tiles.hosting = 'upload'`. The tile's managers upload plain HTML, CSS and JS on its **Files** page; the Edge Function `tile-upload` converts them to fit these rules and commits them to `dame-hub/<tile-id>/`. Section 13.
 - **Local run:** clone `dame-hub` and the tile repos side by side; `node dev/serve.mjs` in `dame-hub` serves it at `http://localhost:8080/dame-hub/` and each sibling repo at `/<tile-id>/`, the same layout as GitHub Pages (tiles inside the admin repo come with it, at `/dame-hub/<tile-id>/`).
 - **Who runs what:** the owner runs the GitHub account, `dame-hub` and Supabase, and applies every SQL file. Each tile repo has its team as collaborators with write access to that repo only. A tile id never reuses the name of another repo in the account.
 
@@ -95,3 +97,18 @@ Short, plain wording, no filler. Show a result rather than a list of questions; 
 - **Install app** is in the account menu, hidden once the page already runs inside the app. On Chrome and Edge it opens the browser's own prompt; elsewhere a sheet with the steps for the device (iPhone and iPad: Safari > Share > Add to Home Screen).
 - `theme-color` follows the page background, day or night (`core.js` updates the meta); the topbar, `main`, sheets and toasts pad for the safe areas.
 - Team instructions: `docs/RUNBOOK.md`, "Install the app". Checked on a real phone whenever an app file changes.
+
+## 13. Uploaded tiles
+For tools a team already has as plain HTML (a calculator, a tracker, a dashboard) and no developer to build a tile. A prototype path: when IT takes a tool over, it rebuilds it on its own servers.
+- **Hosting is a tile setting**, Admin > Tiles > Edit > Files: *Built in its own repo* (`repo`, sections 1-12) or *Uploaded from the site* (`upload`). The database stores the kind, never a URL. An uploaded tile lives in `dame-hub/<tile-id>/` and opens at `/dame-hub/<tile-id>/` (`Core.tilePath(tile)`). Its id may not be a folder of `dame-hub` (`assets`, `core`, `db`, `demo`, `dev`, `docs`, `tools`, `supabase`), and the function refuses to write over a folder it did not create.
+- **Who:** the tile's managers (level Manage) and the super user. Everyone else with the tile only opens it.
+- **The flow:** Files page (`/dame-hub/upload.html?tile=<id>`, also from the dashboard while nothing is live, the DAME bar's **Files** link and Admin > Tiles) > **Upload** files, a folder or one .zip > preview in `dame-hub/<tile-id>/_next/`, open only to managers > **Make live**: the preview replaces everything in `dame-hub/<tile-id>/` in one commit > **Versions**: every live version can be **Restored**; **Discard** drops a preview. GitHub Pages shows each change about a minute later.
+- **The database holds the record, never the files** (owner, 2026-11-25): `core.tile_releases` (version, state preview / live / old / discarded, commit, file count, size, the conversion report, who and when) and the audit (`upload_preview`, `upload_live`, `upload_rollback`, `upload_discard`). The files and their history are in git.
+- **What the conversion does** (`supabase/functions/tile-upload/convert.ts`), so the page passes section 5 and `docs/SECURITY.md` 4 without anyone editing it:
+  - adds the standard head block (CSP, robots, viewport, theme colour, core icons) plus `core/v1/uploaded.css`, `config.js`, `api.js`, `uploaded.js`; drops the page's own CSP, `<base>`, manifest, app icons, preconnects and service-worker files;
+  - moves inline `<script>` and `<style>` into `_dame/js/` and `_dame/css/` (same order, same timing); `onclick=""` and other handler attributes and `javascript:` links into `_dame/js/<page>-on.js`, bound by `uploaded.js` (the inline-handler scope is kept: element, form, document);
+  - keeps `style=""` attributes: the CSP blocks them as written and `uploaded.js` applies them through the CSSOM, which the CSP allows, also for HTML the page adds later;
+  - copies outside scripts, style sheets, fonts and images (CDNs, Google Fonts) into `_dame/vendor/<host>/`: nothing loads from outside;
+  - refuses: no `index.html` among several pages, a service worker registration, a file that cannot be downloaded, names with `..` or odd characters, more than 300 files or 20 MB. Reports (not refused): `eval`, handlers built inside script text, calls to outside addresses, import maps, outside frames and forms, `localStorage.clear()`.
+- **The page at run time:** `uploaded.js` keeps it hidden until the user is signed in, approved and has the tile (a preview: Manage only), then puts the slim DAME bar on top (home, tile name, Files for managers). `theme.css` is not loaded: the tool keeps its own look. The tool may use `Api.rpc` like any page, but an uploaded tile has no schema of its own; a tool that needs data becomes a repo tile (sections 1-12).
+- **Limits:** handlers created inside script text (`innerHTML = '<button onclick=...>'`), `eval`, outside calls and ES-module imports from CDNs do not work; the report says so. Root-relative links (`/x.js`) do not work; use relative paths.

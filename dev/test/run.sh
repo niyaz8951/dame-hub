@@ -1,7 +1,8 @@
 #!/bin/bash
 # Local end-to-end test: a throw-away Postgres (any 16+) stands in for Supabase, the mock serves Auth + rpc on localhost:8080.
 # Needs: psql + a running Postgres (PGARGS, default "-h /tmp -p 5499 -U postgres -d dame"), node 20+, playwright (PLAYWRIGHT_ROOT = its node_modules), Chrome (CHROME).
-# Creates the database from scratch: supabase-stub.sql, db/core/001..011, core tests, seed, demo SQL, demo tests, then the browser run.
+# Creates the database from scratch: supabase-stub.sql, db/core/001..012, core tests, seed, demo SQL, demo tests, then the browser run,
+# the upload converter tests and the uploaded-tile browser run (the mock runs supabase/functions/tile-upload with a folder as store).
 set -e
 cd "$(dirname "$0")/../.."
 : "${PGARGS:=-h /tmp -p 5499 -U postgres -d dame}"
@@ -20,6 +21,7 @@ psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/008_manage_users.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/009_tile_users.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/010_health.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/011_access.sql
+psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/012_uploads.sql
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/tests.sql 2>&1 | grep -E 'ERROR|PASSED'
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f db/core/seed-staging.sql > /dev/null
 psql $PGARGS -q -v ON_ERROR_STOP=1 -f demo/db/demo/001_init.sql > /dev/null
@@ -30,4 +32,6 @@ mkdir -p dev/test/out
 node dev/test/mock-supabase.mjs > dev/test/out/mock.log 2>&1 & MOCK=$!
 sleep 1
 PGARGS="$PGARGS" node dev/test/e2e.mjs || true
+node dev/test/upload-convert.mjs | grep -E 'FAILED|PASSED|✗'
+PGARGS="$PGARGS" node dev/test/upload-e2e.mjs | grep -E 'FAILED|PASSED|✗|problem'
 kill $MOCK

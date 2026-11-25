@@ -176,3 +176,6 @@ The admin project reads every tile's file at the start of each chat and answers 
 - [ ] `tests.sql`: allowed + refused cases for every new function, run on staging
 - [ ] SQL files numbered, ending with `core.applied`, never edited after live, listed in `db/migrations.json` (`node ../dame-hub/dev/migrations-check.mjs .` OK)
 - [ ] `docs/STATUS.md` updated; **Who can do what** in `docs/TILE.md` matches the tile's `core.tile_declare`
+
+## 9. Uploaded tiles
+A tile whose hosting is *Uploaded from the site* has no repo, no team project and no SQL: its managers upload plain HTML, CSS and JS on its Files page and the core converts them (`docs/STANDARDS.md` section 13). Sections 1-8 apply to repo tiles; for uploaded tiles the conversion takes care of the head block, the CSP and the app rules, and section 6 still applies to what the files may contain (no data, no keys, no service worker). When a tool needs data of its own it becomes a repo tile: new repo, the uploaded files as the starting point.

@@ -39,6 +39,55 @@ function session(user_id) {
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(body === undefined ? '' : JSON.stringify(body)); }
 async function readBody(req) { const chunks = []; for await (const c of req) chunks.push(c); const t = Buffer.concat(chunks).toString(); try { return t ? JSON.parse(t) : {}; } catch { return {}; } }
 
+// ---- Edge Function tile-upload: the real handler, with a folder of this repo as the store (no GitHub) and a fake CDN.
+import { handle } from '../../supabase/functions/tile-upload/handler.ts';
+import { rm, mkdir, writeFile, readdir, rename } from 'node:fs/promises';
+const snapshots = new Map();           // "commit" -> { path: bytes } of the tile folder
+const fakeSha = () => randomUUID().replace(/-/g, '').slice(0, 32) + randomUUID().replace(/-/g, '').slice(0, 8);
+async function readTree(dir, pre = '') {
+  const out = {};
+  for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (e.isDirectory()) Object.assign(out, await readTree(join(dir, e.name), pre + e.name + '/'));
+    else out[pre + e.name] = await readFile(join(dir, e.name));
+  }
+  return out;
+}
+async function writeTree(dir, files) {
+  for (const [p, bytes] of Object.entries(files)) { await mkdir(dirname(join(dir, p)), { recursive: true }); await writeFile(join(dir, p), bytes); }
+}
+const folderStore = {
+  async writePreview(tile, files, fresh) {
+    const own = (await readdir(join(hub, tile)).catch(() => [])).filter((n) => n !== '_next');
+    if (fresh && own.length) throw new Error('folder taken');
+    const next = join(hub, tile, '_next'); await rm(next, { recursive: true, force: true });
+    await writeTree(next, Object.fromEntries(files.map((f) => [f.path, f.bytes]))); return fakeSha();
+  },
+  async makeLive(tile) {
+    const dir = join(hub, tile), next = join(dir, '_next');
+    if (!existsSync(next)) throw new Error('no preview');
+    const files = await readTree(next); await rm(dir, { recursive: true, force: true }); await writeTree(dir, files);
+    const sha = fakeSha(); snapshots.set(sha, files); return sha;
+  },
+  async discard(tile) {
+    const dir = join(hub, tile); await rm(join(dir, '_next'), { recursive: true, force: true });
+    if (!(await readdir(dir).catch(() => [])).length) await rm(dir, { recursive: true, force: true });
+    return fakeSha();
+  },
+  async rollback(tile, commit) {
+    const files = snapshots.get(commit); if (!files) throw new Error('unknown commit');
+    const dir = join(hub, tile); await rm(dir, { recursive: true, force: true }); await writeTree(dir, files);
+    const sha = fakeSha(); snapshots.set(sha, files); return sha;
+  }
+};
+const fakeCdn = { 'https://cdn.example.test/lib.js': 'window.Lib = { v: 1 };' };
+const fakeFetch = async (u) => fakeCdn[u] ? { ok: true, status: 200, bytes: new TextEncoder().encode(fakeCdn[u]), type: 'text/javascript' } : { ok: false, status: 404, bytes: new Uint8Array(0), type: '' };
+async function edgeFunction(req, res, url) {
+  const chunks = []; for await (const c of req) chunks.push(c);
+  const r = new Request('http://localhost:' + port + url.pathname + url.search, { method: req.method, headers: req.headers, body: req.method === 'POST' ? Buffer.concat(chunks) : undefined });
+  const out = await handle(r, { supabaseUrl: 'http://localhost:' + port, store: folderStore, fetcher: fakeFetch, origins: ['http://localhost:' + port] });
+  res.writeHead(out.status, Object.fromEntries(out.headers)); res.end(Buffer.from(await out.arrayBuffer()));
+}
+
 const fnCache = new Map();
 function fnInfo(name) {
   if (fnCache.has(name)) return fnCache.get(name);
@@ -122,6 +171,7 @@ function root(id) {
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const path = url.pathname;
+  if (path === '/functions/v1/tile-upload') return edgeFunction(req, res, url);
   if (path.startsWith('/auth/') || path.startsWith('/rest/') || path.startsWith('/storage/')) return api(req, res, path, url);
   if (path === '/dame-hub/core/v1/config.js') {
     let src = await readFile(join(hub, 'core/v1/config.js'), 'utf8');

@@ -2,6 +2,12 @@
 
 Kept in the admin repo as `docs/NEW-TILE.md`. About 15 minutes for the owner; then the tile's team and Claude project do the work. The `demo` tile in `demo/` of this repo is a complete worked example (copy it to a new repo as a starting point).
 
+## An uploaded tile (a ready HTML tool, no developer): 3 minutes
+1. **Admin > Tiles > New tile**: id, name, icon, colour, and **Files: Uploaded from the site**. Save, switch it on.
+2. **Access**: give the team their level; name the person who will upload as **Manage** (only people you would make a repo collaborator, `docs/SECURITY.md` 5).
+3. That person opens the tile on the dashboard ("No files yet. Upload them."), uploads the files, a folder or a .zip, opens the preview and presses **Make live**. Everyone else sees "Not ready yet" until then. Replacing the tool later is the same: upload, check the preview, Make live; old versions can be restored from **Versions**.
+Nothing to register in `docs/TILES.md` beyond one line (column Repo: `dame-hub/<tile-id>/ (uploaded)`). Rules: `docs/STANDARDS.md` section 13.
+
 ## Steps (owner)
 1. **Tile id**: lower case, dashes, short (`hvac-notes`, `sales`, `sbu`), and not the name of any repo you already have.
 2. **GitHub repo**: under your account (today `niyaz8951`), **New repository** named the tile id, Public, with a README. **Settings > Pages** > Deploy from branch `main`, `/ (root)`. **Settings > Advanced Security**: secret scanning and push protection on. **Settings > Rules > Rulesets** on `main`: block force pushes and deletion.

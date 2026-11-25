@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 011). Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 012). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -590,6 +590,75 @@ begin
   end;
   raise notice 'access (011) ok';
 
+
+  -- ---- 012: uploaded tiles
+  declare v_adm uuid := (select id from t_ids where k = 't.admin'); v_usr uuid := (select id from t_ids where k = 't.user');
+          c1 text := repeat('a', 40); c2 text := repeat('b', 40); c3 text := repeat('c', 40); c4 text := repeat('d', 40);
+          r1 bigint; r2 bigint;
+  begin
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_admin_tile_save('tools', 'x', '', 'tile', 'blue', 1, '{}', 'upload')$q$, 'INVALID:hosting');
+    perform pg_temp.expect_error($q$select public.core_admin_tile_save('u-x', 'x', '', 'tile', 'blue', 1, '{}', 'ftp')$q$, 'INVALID:hosting');
+    v := public.core_admin_tile_save('u-tile', 'Upload tile', '', 'tile', 'blue', 30, '{}', 'upload');
+    if v ->> 'hosting' <> 'upload' then raise exception 'hosting saved'; end if;
+    perform public.core_admin_tile_save('u-tile', 'Upload tile', '', 'tile', 'blue', 30, '{}');      -- null keeps it
+    if (select hosting from public.core_admin_tiles() where id = 'u-tile') <> 'upload' then raise exception 'hosting kept'; end if;
+    if (select hosting from public.core_admin_tiles() where id = 't-tile') <> 'repo' then raise exception 'hosting default'; end if;
+    perform public.core_admin_tile_enable('u-tile', true);
+    perform public.core_tile_level_set('u-tile', 'user', v_adm, 'manage');
+    perform public.core_tile_level_set('u-tile', 'user', v_usr, 'read');
+
+    -- refused: signed out, no tile, not a manager, not an uploaded tile, bad values
+    perform pg_temp.act_as(null);
+    perform pg_temp.expect_error($q$select public.core_upload_check('u-tile')$q$, 'PERMISSION');
+    perform pg_temp.expect_error($q$select public.core_upload_preview('u-tile', repeat('a', 40), 1, 1, '[]')$q$, 'PERMISSION');
+    perform pg_temp.act_as('t.none'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_upload_check('u-tile')$q$, 'NO_ACCESS');
+    perform pg_temp.act_as('t.user'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_upload_check('u-tile')$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_upload_preview('u-tile', repeat('a', 40), 1, 1, '[]')$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select * from public.core_upload_list('u-tile')$q$, 'NO_RIGHT');
+    if (select published from public.core_my_tiles() where id = 'u-tile') then raise exception 'published before any upload'; end if;
+    perform pg_temp.act_as('t.admin'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_upload_check('t-tile')$q$, 'INVALID:hosting');
+    perform pg_temp.expect_error($q$select public.core_upload_check('ghost')$q$, 'NOT_FOUND');
+    perform pg_temp.expect_error($q$select public.core_upload_preview('u-tile', 'abc', 1, 1, '[]')$q$, 'INVALID:commit');
+    perform pg_temp.expect_error($q$select public.core_upload_preview('u-tile', repeat('a', 40), 0, 1, '[]')$q$, 'INVALID:files');
+    perform pg_temp.expect_error($q$select public.core_upload_preview('u-tile', repeat('a', 40), 1, 1, '{}')$q$, 'INVALID:report');
+    perform pg_temp.expect_error($q$select public.core_upload_discard('u-tile', repeat('a', 40))$q$, 'NOT_FOUND');
+
+    -- allowed: preview -> live; a second preview replaces the first; live -> old; roll back
+    v := public.core_upload_check('u-tile');
+    if v ->> 'username' <> 't.admin' or v -> 'live' <> 'null'::jsonb or v -> 'preview' <> 'null'::jsonb then raise exception 'check %', v; end if;
+    r1 := (public.core_upload_preview('u-tile', c1, 3, 1200, '[{"level":"info","text":"x"}]') ->> 'id')::bigint;
+    r2 := (public.core_upload_preview('u-tile', c2, 4, 1300, '[]') ->> 'id')::bigint;
+    if (select x ->> 'status' from public.core_upload_list('u-tile') x where (x ->> 'id')::bigint = r1) <> 'discarded' then raise exception 'older preview kept'; end if;
+    perform pg_temp.expect_error(format('select public.core_upload_live(''u-tile'', %s, %L)', r1, c3), 'NOT_FOUND');
+    v := public.core_upload_live('u-tile', r2, c3);
+    if v ->> 'status' <> 'live' or v ->> 'live_by' <> 't.admin' then raise exception 'live %', v; end if;
+    r1 := (public.core_upload_preview('u-tile', c4, 5, 1400, '[]') ->> 'id')::bigint;
+    perform public.core_upload_live('u-tile', r1, repeat('e', 40));
+    if (select x ->> 'status' from public.core_upload_list('u-tile') x where (x ->> 'id')::bigint = r2) <> 'old' then raise exception 'live -> old'; end if;
+    perform pg_temp.expect_error(format('select public.core_upload_rollback(''u-tile'', %s, %L)', r1, c1), 'NOT_FOUND');
+    v := public.core_upload_rollback('u-tile', r2, repeat('f', 40));
+    if v ->> 'status' <> 'live' or v ->> 'live_commit' <> repeat('f', 40) then raise exception 'rollback %', v; end if;
+    if (select count(*) from public.core_upload_list('u-tile') x where x ->> 'status' = 'live') <> 1 then raise exception 'one live'; end if;
+    perform public.core_upload_preview('u-tile', c1, 1, 10, '[]');
+    v := public.core_upload_discard('u-tile', c2);
+    if (select count(*) from public.core_upload_list('u-tile')) <> 4 then raise exception 'list'; end if;
+    reset role;
+    if (select count(*) from core.audit where tile_id = 'u-tile' and action like 'upload\_%') <> 8 then raise exception 'upload audit'; end if;
+
+    -- the dashboard and the admin list
+    perform pg_temp.act_as('t.user'); perform public.core_session_start();
+    if not (select published from public.core_my_tiles() where id = 'u-tile') then raise exception 'published'; end if;
+    if (select hosting from public.core_my_tiles() where id = 'u-tile') <> 'upload' then raise exception 'my_tiles hosting'; end if;
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    if (select live ->> 'id' from public.core_admin_tiles() where id = 'u-tile')::bigint <> r2 then raise exception 'admin live'; end if;
+    if (select preview from public.core_admin_tiles() where id = 'u-tile') is not null then raise exception 'admin preview'; end if;
+    reset role;
+  end;
+  raise notice 'uploads (012) ok';
 
   -- ---- 011: the security check passes pg_cron's own two policies, and only those, only in pg_cron's shape
   if exists (select 1 from core.security_check() where object like 'cron.%') then raise exception 'pg_cron policies reported'; end if;

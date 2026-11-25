@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-loading>
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cykpvtekrdfmqimtrcps.supabase.co; connect-src 'self' https://cykpvtekrdfmqimtrcps.supabase.co; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F7FA">
+<title>Files - DAME HUB</title>
+<link rel="stylesheet" href="/dame-hub/core/v1/theme.css">
+<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">
+<link rel="manifest" href="/dame-hub/manifest.webmanifest">
+<script src="/dame-hub/core/v1/config.js" defer></script>
+<script src="/dame-hub/core/v1/api.js" defer></script>
+<script src="/dame-hub/core/v1/core.js" defer></script>
+<script src="/dame-hub/assets/hub-upload.js" defer></script>
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <div class="page-head">
+    <h1 id="title">Files</h1>
+    <a class="btn" id="open-live" href="/dame-hub/dashboard.html" hidden>Open the tile</a>
+  </div>
+
+  <section class="card" id="live-card">
+    <h2>Live now</h2>
+    <p id="live-text" class="muted">Loading...</p>
+  </section>
+
+  <section class="card" id="preview-card" hidden>
+    <div class="row between">
+      <h2>Preview waiting</h2>
+      <span class="badge warning">not live</span>
+    </div>
+    <p id="preview-text" class="muted"></p>
+    <p class="faint">GitHub needs about a minute after each upload. If the preview shows "404", wait a moment and reload it.</p>
+    <ul class="up-notes" id="preview-notes"></ul>
+    <div class="row">
+      <a class="btn" id="preview-open" href="#">Open the preview</a>
+      <button class="btn primary" id="make-live" type="button">Make live</button>
+      <button class="btn danger" id="discard" type="button">Discard</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 id="upload-title">Upload the tool</h2>
+    <p class="muted">The start page must be <b>index.html</b> (a single HTML file is renamed to it). CSS, JavaScript, images and fonts go with it, as files, a folder or one .zip. Inline scripts, onclick="" and libraries from CDNs are converted to fit the site. It goes up as a <b>preview</b>; nothing changes for users until you press <b>Make live</b>.</p>
+    <div class="dropzone" id="drop">
+      <p><b>Drop files, a folder or a .zip here</b></p>
+      <div class="row center">
+        <label class="btn" for="pick-files">Choose files</label>
+        <label class="btn" for="pick-folder" id="pick-folder-label">Choose a folder</label>
+      </div>
+      <input type="file" id="pick-files" multiple hidden>
+      <input type="file" id="pick-folder" webkitdirectory multiple hidden>
+    </div>
+    <div id="chosen" hidden>
+      <p id="chosen-text"></p>
+      <ul class="up-files" id="chosen-list"></ul>
+      <div class="row">
+        <button class="btn primary" id="send" type="button">Upload as preview</button>
+        <button class="btn ghost" id="clear" type="button">Clear</button>
+      </div>
+    </div>
+    <p class="notice danger" id="upload-error" hidden></p>
+    <ul class="up-notes" id="upload-notes"></ul>
+    <p class="notice warning">The files become <b>public</b> in the site's GitHub repo. Put no real project data, prices, names or keys in them; data belongs in the database.</p>
+  </section>
+
+  <h2 class="section-title">Versions</h2>
+  <div id="history"><p class="faint">Loading...</p></div>
+</main>
+</body>
+</html>

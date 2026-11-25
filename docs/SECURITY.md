@@ -61,14 +61,17 @@ Every GitHub Pages site of one account shares one address (today `https://niyaz8
 - The CSP above stops a page from sending data to any other site.
 - The owner watches every tile repo (GitHub **Watch > All activity**) and reviews SQL before it runs.
 - A tile that breaks these rules is switched off in the admin page (it disappears and its functions refuse) until fixed.
+- **Uploaded tiles** (`docs/STANDARDS.md` 13) run on this same address: the uploaded code can read the session of anyone who opens the tile, exactly like a repo tile's code. Uploading is therefore limited to the tile's managers and the super user, every upload goes to a preview only managers open, goes live only when a manager presses **Make live**, and is in the audit and in the repo history (the owner watches `dame-hub`). Name as manager of an uploaded tile only people you would make a repo collaborator. The converter removes what the CSP would block anyway; it is not a review of the code.
+- **Uploaded files are public** like every repo file: the Files page says so. They hold no real data (section 1); a tool that needs data reads it through functions like any tile.
 
 ## 6. Accounts and keys
 - GitHub: 2FA on the owner account and every collaborator; secret scanning and push protection on in every DAME repo; rulesets on `main` block force push and deletion.
+- **The upload token** (`DAME_GITHUB_TOKEN`, a Supabase Edge Function secret): a fine-grained GitHub token for the `dame-hub` repo only, permission Contents read and write, an expiry date. The owner makes it and pastes it into Supabase; it is never in a repo, a page or a chat. The function `tile-upload` writes only inside `dame-hub/<tile-id>/` of an uploaded tile, after the database said the caller manages that tile. If it leaks: revoke it on GitHub at once (uploads stop, nothing else does) and make a new one (`docs/RUNBOOK.md`).
 - Supabase: owner only, MFA on. Secret key never leaves the dashboard. If anything sensitive is ever pasted in a chat or committed: rotate it at once (new key, revoke the old), then tell the admin project so `docs/STATUS.md` records it.
 - Departing team member: disable his DAME account in the admin page (delete it later if no longer needed), remove him as collaborator from his tile repo.
 
 ## 7. Audit
-`core.audit` records sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, renames, passwords set and accounts deleted by the super user (never the password itself), levels and rights given or taken (people and groups), groups and their members, tile declarations, sharing changes (`share_set`), owner changes and handovers, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
+`core.audit` records uploads of uploaded tiles (preview, live, restore, discard), sign-ins (failed sign-ins are rejected by Supabase Auth before the database sees them: Supabase > Logs > Auth), approvals, renames, passwords set and accounts deleted by the super user (never the password itself), levels and rights given or taken (people and groups), groups and their members, tile declarations, sharing changes (`share_set`), owner changes and handovers, tile on/off, and any action a tile marks as important. It is never deleted. The admin page shows it.
 
 ## 8. Checklist for every delivery (core or tile)
 - [ ] No internal data, key or password anywhere in the repo or its history

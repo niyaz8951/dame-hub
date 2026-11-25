@@ -66,11 +66,15 @@
       if (!tiles.length) { $('#empty').hidden = false; return; }
       tiles.forEach(function (t) {
         var icon = Core.ICONS.indexOf(t.icon) >= 0 ? t.icon : 'tile';
-        var card = el('a', { class: 'tile', href: Core.tilePath(t.id), 'data-accent': Core.accent(t.accent) },
+        // An uploaded tile with nothing live yet: its managers go to the upload page, everyone else sees "Not ready yet".
+        var waiting = t.hosting === 'upload' && t.published === false;
+        var href = waiting ? (t.is_admin ? Core.CORE + '/upload.html?tile=' + encodeURIComponent(t.id) : null) : Core.tilePath(t);
+        var line = waiting ? (t.is_admin ? 'No files yet. Upload them.' : 'Not ready yet.') : (t.tagline || '');
+        var card = el(href ? 'a' : 'div', { class: 'tile' + (href ? '' : ' not-ready'), href: href, 'data-accent': Core.accent(t.accent), 'aria-disabled': href ? null : 'true' },
           el('span', { class: 'icon i-' + icon, 'aria-hidden': 'true' }),
           el('span', { class: 'grow' },
             el('span', { class: 'name', text: t.name }),
-            el('span', { class: 'tagline', text: t.tagline || '' }),
+            el('span', { class: 'tagline', text: line }),
             t.is_admin ? el('span', { class: 'flag' }, el('span', { class: 'badge brand', text: 'admin' })) : null));
         grid.appendChild(card);
       });

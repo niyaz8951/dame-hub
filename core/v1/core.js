@@ -144,8 +144,15 @@ window.Core = (function () {
   Core.param = function (name) { return new URLSearchParams(window.location.search).get(name); };
   Core.go = function (path) { window.location.assign(path); };
   // Only paths on this site may be used as a "next" destination.
-  // Where a tile opens: /<id>/ for a sibling repo, /dame-hub/<id>/ for a tile kept inside the admin repo (config INSIDE_CORE).
-  Core.tilePath = function (id) { return ((cfg.INSIDE_CORE || []).indexOf(id) >= 0 ? CORE : '') + '/' + id + '/'; };
+  // Where a tile opens: /<id>/ for a sibling repo, /dame-hub/<id>/ for a tile kept inside the admin repo (config INSIDE_CORE)
+  // or uploaded from the site.
+  // Uploaded tiles (hosting 'upload', docs/STANDARDS.md section 13) live inside the admin repo too. Pass the tile row
+  // (from core_my_tiles, core_admin_tiles or Core.tile) where you have it; a bare id knows only INSIDE_CORE.
+  Core.tilePath = function (t) {
+    var id = typeof t === 'string' ? t : t.id;
+    var inside = (t && t.hosting === 'upload') || (cfg.INSIDE_CORE || []).indexOf(id) >= 0;
+    return (inside ? CORE : '') + '/' + id + '/';
+  };
   Core.safeNext = function (p) { return p && /^\/[a-z0-9][a-z0-9-]*\/[^\s]*$/i.test(p) && p.indexOf('//') !== 0 ? p : CORE + '/dashboard.html'; };
 
   // ---------- access levels (for showing and hiding only: the database decides) ----------
