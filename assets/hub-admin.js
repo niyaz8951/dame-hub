@@ -518,6 +518,7 @@
         return;
       }
       var goes = [plan.people + ' people and ' + plan.groups + ' groups lose access', plan.containers ? plan.containers + ' shared items and their sharing' : null,
+        plan.records ? plan.records + ' data records of the tool (download them first: Files > Download the tool\'s shared data)' : null,
         plan.releases ? plan.releases + ' upload versions' + (plan.files ? ' and the files in dame-hub/' + t.id + '/' : '') : null].filter(Boolean);
       var input = el('input', { id: 'td-confirm', autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' });
       var anyway = false;

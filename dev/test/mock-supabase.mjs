@@ -11,7 +11,7 @@ import { dirname } from 'node:path'; import { fileURLToPath } from 'node:url';
 const hub = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const port = 8080;
 const PG = [...(process.env.PGARGS || '-h /tmp -p 5499 -U postgres -d dame').split(' '), '-Atq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const types = { '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const sessions = new Map(); // refresh_token -> { user_id, session_id }
 
 function sql(q) {
@@ -186,6 +186,6 @@ createServer(async (req, res) => {
   let info = await stat(file).catch(() => null);
   if (info && info.isDirectory()) { file = join(file, 'index.html'); info = await stat(file).catch(() => null); }
   if (!info) { res.writeHead(404); return res.end('404'); }
-  res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+  res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });   // as GitHub Pages
   res.end(await readFile(file));
 }).listen(port, () => console.log('mock on ' + port));

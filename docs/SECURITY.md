@@ -43,7 +43,7 @@ GitHub Pages and the Supabase API are reachable from the internet; that is how t
   ```
   (the exact line is published in `core/v1/README.md`; tiles copy it). No inline scripts, no inline event handlers, no `eval`.
 - `textContent` / `Core.el()` only; never `innerHTML`, `insertAdjacentHTML` or `document.write` with any data.
-- No CDN, external font, analytics, tracker, iframe or third-party script. Libraries are copied into the repo after review.
+- No CDN, external font, analytics, tracker, iframe or third-party script. Libraries are copied into the repo after review. (Two frames exist, both the core's or the owner's decision: the sealed frame of uploaded tiles, section 5, and the YouTube player below.)
 - **One exception, embedded YouTube player**, only for tiles the owner allowed (today: `hvac-notes`, 2026-11-04; the list is kept in `docs/TILES.md`, column Exceptions). The player runs on YouTube's own address, so it cannot read the DAME session, the page or any data; the conditions keep it that way:
   - CSP: the published line plus `; frame-src https://www.youtube-nocookie.com` and nothing else. Other directives are unchanged (no YouTube thumbnails from `i.ytimg.com`, no YouTube scripts on the page).
   - Only on pages that show videos. Nothing loads from YouTube until the reader taps play (a local placeholder until then).
@@ -61,7 +61,13 @@ Every GitHub Pages site of one account shares one address (today `https://niyaz8
 - The CSP above stops a page from sending data to any other site.
 - The owner watches every tile repo (GitHub **Watch > All activity**) and reviews SQL before it runs.
 - A tile that breaks these rules is switched off in the admin page (it disappears and its functions refuse) until fixed.
-- **Uploaded tiles** (`docs/STANDARDS.md` 13) run on this same address: the uploaded code can read the session of anyone who opens the tile, exactly like a repo tile's code. Uploading is therefore limited to the tile's managers and the super user, every upload goes to a preview only managers open, goes live only when a manager presses **Make live**, and is in the audit and in the repo history (the owner watches `dame-hub`). Name as manager of an uploaded tile only people you would make a repo collaborator. The converter removes what the CSP would block anyway; it is not a review of the code.
+- **Uploaded tiles are sealed** (`docs/STANDARDS.md` 13, core 014, 2026-11-26). Uploaded code is never trusted and never runs on this address's own origin:
+  - Its pages are stored as text (`<page>.html.txt`), so opening a file's address directly shows text and runs nothing. The only HTML in an uploaded tile's folder is the core's own shell `index.html`, the same for every tile. The converter stores nothing that can run when opened: no `.html`, `.xhtml`, `.xml`; SVGs only if they hold no script, handler, link or foreign content; outside files only of listed types.
+  - The shell checks the user, then loads the page into `<iframe sandbox="allow-scripts allow-forms allow-modals allow-downloads">` through `srcdoc`: no `allow-same-origin`, no popups, no top navigation. The code gets an empty origin: no session, no site storage, no cookies, no access to the shell.
+  - The shell's policy (inherited by the frame) lets the frame load and call only this site and Supabase, and `frame-src 'self'` stops it from moving itself to an outside address. Outside links open only after the user confirms.
+  - The tool reaches data only through the bridge (`core/v1/sealed.js` to `core/v1/uploaded.js`), which calls `core_data_*` with the user's own session; the functions decide. The frame never sees a token.
+  - What remains: a tool can show its own users something misleading (a fake form) and store what they type in its own data. The DAME bar above every tool says where the user is; the tile's managers are named people, and every upload is in the audit. Name managers accordingly.
+  - A browser test proves each point on every run (`dev/test/upload-e2e.mjs`): no origin, storage and page unreadable, top navigation and outside calls blocked, pages served as text.
 - **Uploaded files are public** like every repo file: the Files page says so. They hold no real data (section 1); a tool that needs data reads it through functions like any tile.
 
 ## 6. Accounts and keys

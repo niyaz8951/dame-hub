@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 013). Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 014). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -659,6 +659,56 @@ begin
     reset role;
   end;
   raise notice 'uploads (012) ok';
+
+  -- ---- 014: the data service of uploaded tools
+  declare v_usr uuid := (select id from t_ids where k = 't.user'); rid text;
+  begin
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform public.core_tile_level_set('u-tile', 'user', v_usr, 'contribute');
+    perform public.core_admin_tile_save('d-read', 'Data read', '', 'tile', 'blue', 31, '{}', 'upload');
+    perform public.core_admin_tile_enable('d-read', true);
+    perform public.core_tile_level_set('d-read', 'user', v_usr, 'read');
+    perform public.core_admin_tile_save('d-repo', 'Data repo', '', 'tile', 'blue', 32, '{}', 'repo'); perform public.core_admin_tile_enable('d-repo', true);
+    perform pg_temp.expect_error($q$select public.core_data_put('d-repo', 'rows', null, '{}')$q$, 'INVALID:hosting');
+    -- refused: signed out, no tile, a repo tile, a reader writing, bad values, preview for a non-manager
+    perform pg_temp.act_as(null);
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', null, '{}')$q$, 'PERMISSION');
+    perform pg_temp.expect_error($q$select public.core_data_get('u-tile', 'rows', 'x')$q$, 'PERMISSION');
+    perform pg_temp.act_as('t.none'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', null, '{}')$q$, 'NO_ACCESS');
+    perform pg_temp.expect_error($q$select * from public.core_data_list('u-tile', 'rows')$q$, 'NO_ACCESS');
+    perform pg_temp.act_as('t.user'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_data_put('d-read', 'rows', null, '{}')$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'Bad Name', null, '{}')$q$, 'INVALID:collection');
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', null, null)$q$, 'INVALID:data');
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', null, to_jsonb(repeat('x', 300000)))$q$, 'INVALID:size');
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', null, '{}', false, true)$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_data_export('u-tile')$q$, 'NO_RIGHT');
+    -- allowed: a reader keeps private records; contribute writes shared ones
+    v := public.core_data_put('d-read', '_local', 'store', '{"a": "1"}', true);
+    if public.core_data_get('d-read', '_local', 'store', true) -> 'data' ->> 'a' <> '1' then raise exception 'mine'; end if;
+    rid := public.core_data_put('u-tile', 'rows', null, '{"n": 1}') ->> 'id';
+    perform public.core_data_put('u-tile', 'rows', 'mine-only', '{"p": 1}', true);
+    if (select count(*) from public.core_data_list('u-tile', 'rows')) <> 1 then raise exception 'shared list'; end if;
+    if (select count(*) from public.core_data_list('u-tile', 'rows', true)) <> 1 then raise exception 'mine list'; end if;
+    -- the manager (t.admin) sees the shared record, not the private one; he edits and deletes others'
+    perform pg_temp.act_as('t.admin'); perform public.core_session_start();
+    if public.core_data_get('u-tile', 'rows', rid) -> 'data' ->> 'n' <> '1' then raise exception 'shared read'; end if;
+    if public.core_data_get('u-tile', 'rows', 'mine-only', true) is not null then raise exception 'private leaked'; end if;
+    perform public.core_data_put('u-tile', 'rows', 'adm', '{"n": 2}');
+    perform public.core_data_put('u-tile', 'rows', 'adm', '{"t": 1}', false, true);                    -- preview set
+    if public.core_data_get('u-tile', 'rows', 'adm') -> 'data' ->> 'n' <> '2' then raise exception 'preview touched live'; end if;
+    if jsonb_array_length(public.core_data_export('u-tile') -> 'records') <> 2 then raise exception 'export'; end if;
+    -- contribute cannot change or delete another's record
+    perform pg_temp.act_as('t.user'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_data_put('u-tile', 'rows', 'adm', '{"n": 3}')$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_data_delete('u-tile', 'rows', 'adm')$q$, 'NO_RIGHT');
+    if not public.core_data_delete('u-tile', 'rows', rid) then raise exception 'own delete'; end if;
+    if public.core_data_delete('u-tile', 'rows', 'ghost') then raise exception 'ghost delete'; end if;
+    reset role;
+    if (select count(*) from core.tile_data_history where tile_id = 'u-tile') <> 3 then raise exception 'history'; end if;
+  end;
+  raise notice 'data service (014) ok';
 
   -- ---- 013: delete a tile
   begin

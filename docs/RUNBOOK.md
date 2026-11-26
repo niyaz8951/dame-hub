@@ -65,7 +65,7 @@ update core.profiles set is_super = false where username = 'name'; -- remove
 Admin page > Tiles > the switch. Off: the tile disappears from every dashboard and every `public.<tile>_*` function refuses with `NO_ACCESS`. Use it the moment a tile breaks a rule.
 
 ## Uploaded tiles: set up once (owner, about 15 minutes)
-1. **Apply `db/core/012_uploads.sql`** (Apply a SQL file, above), then Admin > Health > Run check now: Clean.
+1. **Apply `db/core/012_uploads.sql`, `013_tile_delete.sql`, `014_tile_data.sql`**, in that order (Apply a SQL file, above), then Admin > Health > Run check now: Clean.
 2. **GitHub token**: GitHub > Settings > Developer settings > Personal access tokens > **Fine-grained tokens** > Generate new token. Name `dame-upload`, expiration 1 year (diary reminder), Resource owner your account, **Only select repositories: `dame-hub`**, Permissions > Repository > **Contents: Read and write** (Metadata read-only is added by itself). Generate and copy it. Never paste it anywhere but step 3.
 3. **Supabase > Edge Functions > Secrets** (project `dame-hub`): add
    - `DAME_GITHUB_TOKEN` = the token

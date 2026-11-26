@@ -112,7 +112,7 @@ Recorded with who, when, where: sign-ins, approvals, roles named and removed, ac
 | Phase | What | Done when |
 |---|---|---|
 | 0 | Run 012 and 013, upload setup, first upload on live | PMO is live from an upload |
-| 1 | Sealed frame and bridge; the data service (core 014) | a tracker saves shared records; a hostile test tool cannot read the session |
+| 1 | Sealed frame and bridge; the data service (core 014). **Built 2026-11-26**, tested on the stand-in; waits for phase 0 and the owner's check on live | a tracker saves shared records; a hostile test tool cannot read the session |
 | 2 | Departments, department admins, inherited access, limits (core 015) | an admin builds a department alone; every action outside it is refused |
 | 3 | Staging project and the SQL pipeline | a file reaches live only through an approval; a bad file is stopped |
 | 4 | Second super user, backups, Health items, monthly review | restore tested; last-admin and last-super rules refuse |

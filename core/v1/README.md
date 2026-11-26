@@ -92,4 +92,12 @@ Tile accents (2026-11-04): every tile has one hue from the core palette, set in 
 Palette: Daikin Middle East (`--brand #0097E0`, `--brand-sky #54C3F1`, `--brand-navy #0B2A4A`). Night mode follows the device; the round sun/moon button in the topbar overrides it (stored in `localStorage` as `dame.theme`) with a circular reveal where the browser supports View Transitions, a short fade elsewhere, nothing with reduced motion. `Core.themeToggle(event)`, `Core.isNight()`, `Core.initials(name)`.
 
 ## Uploaded tiles
-Pages of an uploaded tile (`docs/STANDARDS.md` section 13) do not use the head block above: `tile-upload` writes theirs. It loads `uploaded.css` (the bar and the gate, nothing global) and, without `defer`, `config.js`, `api.js` and `uploaded.js` (applies `style=""` through the CSSOM, binds the handlers in `_dame/js/<page>-on.js`, the guard, the DAME bar). `core.js` and `theme.css` are not loaded there, so the tool keeps its own look. Changing `uploaded.js` or `uploaded.css` changes every uploaded tile at once.
+An uploaded tile (`docs/STANDARDS.md` section 13) has one HTML file, the shell `index.html` written by `tile-upload`: the site policy with `frame-src 'self'`, `uploaded.css`, `config.js`, `api.js`, `uploaded.js`. `uploaded.js` checks the user, shows the DAME bar and loads the tool's pages (stored as `.html.txt`) into a sealed frame; `sealed.js` is the bridge inside the frame. `core.js` and `theme.css` are not loaded, so the tool keeps its own look. Changing `uploaded.js`, `uploaded.css` or `sealed.js` changes every uploaded tile at once.
+
+| Inside a tool | What it does |
+|---|---|
+| `Dame.user()` | `{ username, display_name, level, is_super, tile, preview }` |
+| `Dame.save(collection, record, opts)` | Creates or replaces (`record.id` optional); resolves to `{ id, data, by, at, updated_by, updated_at }` |
+| `Dame.load(collection, id, opts)`, `Dame.list(collection, opts)`, `Dame.remove(collection, id, opts)` | `opts.mine = true`: private to the user; otherwise shared with the tile. `list` takes `limit`, `after` |
+| `Dame.go(page)`, `Dame.download(name, blobOrText)`, `Dame.toast(text)` | Page change, file save, short message |
+| `localStorage`, `sessionStorage` | Stand-ins; `localStorage` is kept per user by the site |

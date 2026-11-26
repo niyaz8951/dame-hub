@@ -2,6 +2,14 @@
 
 What was built and decided, by date, with the owner's words where a decision came from him. The current state and next steps are in `docs/STATUS.md`; changes that tiles must act on are in `docs/TILE-CHANGES.md`.
 
+## Blueprint phase 1: sealed tools and the data service (2026-11-26, owner: "go")
+- Uploaded code no longer runs on the site's origin. `convert.ts` stores pages as `<page>.html.txt` and writes the core's shell `index.html`; `core/v1/uploaded.js` (rewritten) is the shell: guard, DAME bar, sealed `srcdoc` frame, message bridge; `core/v1/sealed.js` (new) runs inside: `Dame.*`, storage stand-ins, links, style attributes, handlers. SVGs are checked, `.xml` dropped, outside files limited to listed types.
+- `db/core/014_tile_data.sql`: `core.tile_data`, `core.tile_data_history`, `core_data_get / list / put / delete / export`, levels as in the blueprint, preview data separate, limits; `core_admin_tile_plan` counts records. Tests in `db/core/tests.sql`.
+- Files page: Download the tool's shared data. Guide and AI prompt describe `Dame` and the sealed rules.
+- Tests: converter (nothing runnable stored), browser (no origin, session and page unreadable, top navigation and outside calls blocked, pages as text, data service by level, localStorage kept).
+- Decided without asking: `allow-modals` and `allow-downloads` stay on (alert, confirm, print, file saves are what tools do); outside links open after a confirm; a reader may keep private records; preview data is kept apart and not cleaned automatically; the shell allows `base-uri 'self'` so pages in folders resolve their files.
+- Started before phase 0 was reported done (the blueprint's own gate): the owner said go; nothing of it is live until 012-014 run and the function is deployed.
+
 ## New tile guidance, delete a tile (2026-11-26, owner: "make prompt available when new tile is made (along with upload files); enable to add or delete tiles, deleting tiles must do necessary cleanup")
 - `db/core/013_tile_delete.sql`: `core_admin_tile_plan`, `core_admin_tile_delete(id, confirm)`, `core.tile_leftovers`; tests. Edge Function action `remove` (super user; deletes `dame-hub/<tile>/`).
 - Admin > Tiles: New tile starts with "How is this tile made?" (uploaded by default); next-steps sheet after Save; Edit > Delete tile (id typed to confirm). `assets/hub-tool-guide.js`: rules + AI prompt, one text for Admin and the Files page.

@@ -2,11 +2,11 @@
 // section 13). Pure: no network, no GitHub; outside files come through the fetcher the caller passes in.
 //
 // What it does to every page:
-//   - adds the standard head block (CSP, robots, viewport, theme colour, core icons) and the uploaded-tile guard;
+//   - stores it as <page>.txt and adds the bridge (core/v1/sealed.js); the shell index.html frames it sealed;
 //   - moves inline <script> and <style> blocks into files under _dame/;
 //   - turns onclick="" and other handler attributes, and javascript: links, into listeners in _dame/js/<page>-on.js
-//     (core/v1/uploaded.js binds them, also on elements added later);
-//   - style="" attributes stay: core/v1/uploaded.js applies them through the CSSOM, which the CSP allows;
+//     (core/v1/sealed.js binds them, also on elements added later);
+//   - style="" attributes stay: core/v1/sealed.js applies them through the CSSOM, which the CSP allows;
 //   - copies outside scripts, styles, fonts and images (CDNs) into _dame/vendor/, so nothing loads from outside;
 //   - drops manifests, service workers, app icons, <base> and the page's own CSP.
 // Anything it cannot fix is reported; errors stop the upload, warnings do not.
@@ -21,7 +21,10 @@ export type Result = { ok: boolean; files: InFile[]; notes: Note[] };
 
 export const LIMITS = { files: 300, fileBytes: 10 * 1024 * 1024, totalBytes: 20 * 1024 * 1024, downloads: 40, downloadBytes: 5 * 1024 * 1024 };
 
-const TEXT_EXT = ['html', 'htm', 'css', 'js', 'mjs', 'json', 'map', 'txt', 'md', 'csv', 'tsv', 'xml', 'svg'];
+// Whitelist. Pages (.html, .htm) are stored as <name>.txt so that nothing an uploader writes can run when its
+// address is opened directly; the shell loads them into a sealed frame. No .xml, .xhtml (they can run script).
+const TEXT_EXT = ['html', 'htm', 'css', 'js', 'mjs', 'json', 'map', 'txt', 'md', 'csv', 'tsv', 'svg'];
+const VENDOR_EXT = ['css', 'js', 'mjs', 'json', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot'];
 const BIN_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'pdf',
   'mp3', 'mp4', 'webm', 'ogg', 'wav', 'xlsx', 'docx', 'pptx'];
 const DROP_NAMES = /^(sw|service-?worker|serviceworker)\.m?js$|\.webmanifest$|^apple-touch-icon.*\.png$|^favicon.*\.(ico|png|svg)$|^(\.ds_store|thumbs\.db|desktop\.ini)$/i;
@@ -33,6 +36,31 @@ const RAW_TEXT = ['script', 'style', 'textarea', 'title'];
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+
+export const BOOT_MARK = '<!--DAME-BOOT-->';
+
+// True when an SVG holds nothing that can run: opened directly it is a document, so script, handlers, links and
+// foreign content are refused outright.
+export function svgSafe(text: string): boolean {
+  const t = decodeEntities(text).toLowerCase().replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+  return !/<script|<foreignobject|<iframe|<embed|<object|<!entity|<!doctype[^>]*\[|javascript\s*:|data\s*:\s*text\/html|[\s"'\/]on[a-z]+\s*=|<a[\s>\/]|<set[\s>\/]|<animate|<\?xml-stylesheet|<handler|<listener|<use[^>]+href\s*=\s*["']?\s*(https?:|\/\/)/.test(t);
+}
+
+// The page GitHub serves at /dame-hub/<tile>/ (and /_next/): the core's own shell. It checks the user, then loads
+// the tool's pages (stored as .txt) into a sealed frame. Same for every tile; nothing of the upload is in it.
+export function shell(tile: string, supabaseUrl: string): string {
+  return '<!doctype html>\n<html lang="en">\n<head>\n' +
+    '<meta http-equiv="Content-Security-Policy" content="' + csp(supabaseUrl).replace("base-uri 'none'", "base-uri 'self'") + "; frame-src 'self'" + '">\n' +
+    '<meta charset="utf-8">\n<meta name="robots" content="noindex, nofollow">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="theme-color" content="#F3F7FA">\n' +
+    '<meta name="dame-tile" content="' + tile + '">\n<title>DAME HUB</title>\n' +
+    '<link rel="stylesheet" href="/dame-hub/core/v1/uploaded.css">\n' +
+    '<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">\n' +
+    '<link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">\n' +
+    '<link rel="manifest" href="/dame-hub/manifest.webmanifest">\n' +
+    '<script src="/dame-hub/core/v1/config.js" defer></script>\n<script src="/dame-hub/core/v1/api.js" defer></script>\n' +
+    '<script src="/dame-hub/core/v1/uploaded.js" defer></script>\n</head>\n<body>\n</body>\n</html>\n';
+}
 
 export function csp(supabaseUrl: string): string {
   const s = supabaseUrl.replace(/\/+$/, '');
@@ -162,6 +190,8 @@ async function vendor(ctx: Ctx, url: string, fromFile: string, expect: 'css' | '
   if (got.bytes.length > LIMITS.downloadBytes) { note(ctx, 'error', fromFile, 'Outside file too big: ' + abs.slice(0, 120)); return null; }
   const type = got.type || (expect === 'css' ? 'text/css' : expect === 'js' ? 'text/javascript' : '');
   const path = vendorPath(abs, type);
+  if (VENDOR_EXT.indexOf(ext(path)) < 0) { note(ctx, 'error', fromFile, 'Outside file of a type that cannot be copied in: ' + abs.slice(0, 120)); return null; }
+  if (ext(path) === 'svg' && !(isText(got.bytes) && svgSafe(dec.decode(got.bytes)))) { note(ctx, 'error', fromFile, 'Outside SVG with script or links in it: ' + abs.slice(0, 120)); return null; }
   ctx.vendored.set(abs, path);
   if (/css/.test(type) || expect === 'css') {
     const css = await fixCss(ctx, dec.decode(got.bytes), path, abs, depth + 1);
@@ -207,7 +237,8 @@ function checkJs(ctx: Ctx, js: string, file: string, vendored = false): void {
   if (/<[a-z][^>]*\son[a-z]+\s*=/i.test(js)) note(ctx, 'warn', file, 'Builds HTML with onclick="..." or another handler inside the script; those handlers will not run. Use addEventListener.');
   if (/\bimport\s*(?:[\w*{}\s,]+from\s*)?["']https?:|import\s*\(\s*["']https?:/.test(js)) note(ctx, 'warn', file, 'Imports code from an outside address; that is blocked. Put the library in the upload.');
   if (/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\b[\s\S]{0,200}?["'`](https?|wss?):\/\/(?![a-z0-9-]+\.supabase\.co)/i.test(js)) note(ctx, 'warn', file, 'Seems to call an outside address; calls outside the site are blocked.');
-  if (/localStorage\s*\.\s*clear\s*\(/.test(js)) note(ctx, 'warn', file, 'localStorage.clear() also signs the user out of DAME. Remove only your own keys.');
+  if (/\bindexedDB\b|document\s*\.\s*cookie|\bcaches\s*\./.test(js)) note(ctx, 'warn', file, 'Uses IndexedDB, cookies or caches; a sealed tool has none. Use localStorage (kept per user by the site) or Dame.save.');
+  if (/location\s*(\.\s*href)?\s*=\s*["'`][^"'`]*\.html?|location\s*\.\s*(assign|replace)\s*\(/.test(js)) note(ctx, 'warn', file, 'Changes the page from script (location = ...). Use a normal link, or Dame.go("page.html").');
   if (/\bwindow\s*\.\s*open\s*\(|target\s*=\s*["']_blank/.test(js)) note(ctx, 'info', file, 'Opens new windows; inside the installed app they open in the browser.');
 }
 
@@ -224,19 +255,13 @@ async function fixHtml(ctx: Ctx, path: string, html: string, pageNo: number): Pr
   const onFile = '_dame/js/' + stem + '-on.js';
   const HEAD_MARK = '\u0000DAME_HEAD\u0000';
 
+  // A tool page runs inside the sealed frame; the policy comes from the shell that frames it (inherited). BOOT_MARK
+  // is where the shell puts <base> and the boot data before it loads the page.
   function headBlock(): string {
     return '<meta charset="utf-8">\n' +
-      '<meta http-equiv="Content-Security-Policy" content="' + csp(ctx.opts.supabaseUrl) + '">\n' +
-      '<meta name="robots" content="noindex, nofollow">\n' +
       '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
-      '<meta name="theme-color" content="#F3F7FA">\n' +
-      '<meta name="dame-tile" content="' + tile + '">\n' +
-      '<link rel="stylesheet" href="/dame-hub/core/v1/uploaded.css">\n' +
-      '<link rel="icon" href="/dame-hub/core/v1/icons/favicon.svg" type="image/svg+xml">\n' +
-      '<link rel="apple-touch-icon" href="/dame-hub/core/v1/icons/apple-touch-icon.png">\n' +
-      '<script src="/dame-hub/core/v1/config.js"></script>\n' +
-      '<script src="/dame-hub/core/v1/api.js"></script>\n' +
-      '<script src="/dame-hub/core/v1/uploaded.js"></script>\n' +
+      BOOT_MARK + '\n' +
+      '<script src="/dame-hub/core/v1/sealed.js"></script>\n' +
       HEAD_MARK;
   }
 
@@ -322,8 +347,7 @@ async function fixHtml(ctx: Ctx, path: string, html: string, pageNo: number): Pr
       changed = true;
     }
 
-    if (name === 'html') { if (getAttr(t, 'data-up-locked') === null) { t.attrs.push({ name: 'data-up-locked', raw: null }); changed = true; } }
-    else if (name === 'head') {
+    if (name === 'head') {
       if (!headDone) { out += writeTag(t) + '\n' + headBlock(); headDone = true; continue; }
     } else if (name === 'body' && !headDone) { out += headBlock(); headDone = true; }
     else if (name === 'meta') {
@@ -422,10 +446,6 @@ async function fixHtml(ctx: Ctx, path: string, html: string, pageNo: number): Pr
   out = out.split(HEAD_MARK).join(headLinks.join('') + onTag);
   if (!/^\s*<!doctype/i.test(out)) out = '<!doctype html>\n' + out;
   if (!/<html[\s>]/i.test(out)) note(ctx, 'info', path, 'The page has no <html> tag; the browser adds one.');
-  if (!/<html[^>]*data-up-locked/i.test(out)) {
-    if (/<html[\s>]/i.test(out)) out = out.replace(/<html(\s|>)/i, '<html data-up-locked$1');
-    else out = out.replace(/^(\s*<!doctype[^>]*>\s*)/i, '$1<html data-up-locked>\n');
-  }
   return out;
 }
 
@@ -456,6 +476,7 @@ export async function convertTool(input: InFile[], opts: Options): Promise<Resul
     if (seen.has(k)) { note(ctx, 'error', f.path, 'Two files with the same name (letters differ only in case).'); return false; }
     seen.add(k);
     const top = f.path.split('/')[0];
+    if (ext(f.path) === 'txt' && /\.html?\.txt$/i.test(f.path)) { note(ctx, 'error', f.path, 'A name ending in .html.txt is used by the site. Rename the file.'); return false; }
     if (top === '_dame' || top === '_next') { note(ctx, 'error', f.path, 'The folder names _dame and _next are used by the site. Rename the folder.'); return false; }
     if (DROP_NAMES.test(base(f.path))) { note(ctx, 'info', f.path, 'Left out: DAME is one app, so a tile has no manifest, service worker or app icons of its own.'); return false; }
     const e = ext(f.path);
@@ -485,15 +506,19 @@ export async function convertTool(input: InFile[], opts: Options): Promise<Resul
         if (!isText(f.bytes)) note(ctx, 'warn', f.path, 'The page is not saved as UTF-8; some letters may look wrong.');
         const stem = base(f.path).replace(/\.[a-z0-9]+$/i, '');
         const n = stems.get(stem) || 0; stems.set(stem, n + 1);
-        ctx.out.set(f.path, enc.encode(await fixHtml(ctx, f.path, dec.decode(f.bytes), n)));
+        ctx.out.set(f.path + '.txt', enc.encode(await fixHtml(ctx, f.path, dec.decode(f.bytes), n)));
       } else if (e === 'css') {
         ctx.out.set(f.path, enc.encode(await fixCss(ctx, dec.decode(f.bytes), f.path, undefined, 0)));
       } else {
         if (e === 'js' || e === 'mjs') checkJs(ctx, dec.decode(f.bytes), f.path);
+        if (e === 'svg' && !(isText(f.bytes) && svgSafe(dec.decode(f.bytes)))) { note(ctx, 'error', f.path, 'This SVG has script, handlers or links in it. Save it as a plain drawing.'); continue; }
         ctx.out.set(f.path, f.bytes);
       }
     }
   }
+  if (ctx.out.has('index.html')) note(ctx, 'error', 'index.html', 'Internal: a page was about to be stored as HTML.');
+  ctx.out.set('index.html', enc.encode(shell(opts.tile, opts.supabaseUrl)));
+  for (const p of ctx.out.keys()) if (p !== 'index.html' && /\.(x?html?|xht|xml|shtml)$/i.test(p)) note(ctx, 'error', p, 'Internal: a file that could run was about to be stored.');
   const ok = !ctx.notes.some((n) => n.level === 'error');
   const order = { error: 0, warn: 1, info: 2 };
   ctx.notes.sort((a, b) => order[a.level] - order[b.level]);

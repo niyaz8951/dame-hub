@@ -9,8 +9,9 @@
     'No real project data, prices, customer names or keys in the files: they become public in the repo.',
     'Buttons and inputs get their actions with addEventListener. onclick="" written in the HTML is converted; onclick built inside script text is not.',
     'No login, manifest, service worker or install prompt of its own: DAME gives the sign-in and the app.',
-    'No calls to outside sites or APIs. Libraries from a CDN are copied in at upload; better put them in the upload.',
-    'What the tool saves in the browser (localStorage) stays on that one device. Never call localStorage.clear().',
+    'No calls to outside sites or APIs. Libraries from a CDN are copied in at upload; better put them in the upload. SVG images must be plain drawings (no script, no links).',
+    'The tool runs sealed inside the site: it cannot reach the sign-in, other tiles or outside addresses.',
+    'Data: localStorage works and is kept per user by the site, on every device. Data the team shares goes through Dame.save and Dame.list (in the prompt below). No IndexedDB, no cookies.',
     'It must fit a phone (390 px wide) and never depend on new tabs or the browser\'s back button.',
     'Upload, open the preview, check it, then Make live. Older versions can be restored.'
   ];
@@ -22,7 +23,13 @@
       '3. All events with addEventListener in the .js file. No inline onclick, no inline <script> or <style>, no eval, no new Function.\n' +
       '4. No login, no manifest, no service worker, no install prompt, no analytics, no iframes.\n' +
       '5. No fetch, XMLHttpRequest or WebSocket to any outside address.\n' +
-      '6. No real data in the files; use invented examples. Data the user enters may be kept in localStorage under keys starting with "' + 'tool.' + '"; never call localStorage.clear(). Offer export and import as a file (JSON or CSV) so data can move between devices.\n' +
+      '6. No real data in the files; use invented examples. The site gives the page a global object Dame (already loaded, do not define it):\n' +
+      '   - Dame.user() returns { username, display_name, level } (level: read, contribute, edit, approve or manage).\n' +
+      '   - Shared team data: await Dame.save("rows", { id?, ...fields }) returns { id, data, by, at, updated_at }; await Dame.list("rows") returns such records, newest first; await Dame.load("rows", id); await Dame.remove("rows", id). Collection names: lower case letters, digits, dashes. A record is at most 256 KB of JSON.\n' +
+      '   - Private data of the user: the same calls with a last argument { mine: true }, or plain localStorage (the site keeps it per user).\n' +
+      '   - Users with level read cannot save shared data: hide or disable editing for them, and show the message of any rejected call.\n' +
+      '   - Dame.download(fileName, blobOrText) saves a file; Dame.toast(text) shows a short message. No IndexedDB, cookies, window.open or page changes from script; link pages with normal <a href="page.html">.\n' +
+      '   - When opened outside the site (Dame is undefined) fall back to localStorage so I can test the files on my computer.\n' +
       '7. Responsive from 390 px to desktop; no horizontal scroll; buttons at least 40 px high. No target="_blank", no dependence on the browser back button.\n' +
       '8. Clear empty, loading and error states. Plain English labels.\n\n' +
       'What the tool does:\n[describe the tool here: who uses it, what they enter, what it calculates or shows, what they take away]\n\n' +

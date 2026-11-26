@@ -190,6 +190,12 @@
       var p = entries.length ? fromEntries(entries) : Promise.resolve(Array.prototype.map.call(e.dataTransfer.files || [], function (f) { return { path: f.name, blob: f }; }));
       p.then(take).catch(fail);
     });
+    $('#export').addEventListener('click', function (ev) {
+      Core.busy(ev.currentTarget, function () { return Api.rpc('core_data_export', { p_tile: tile }); }).then(function (out) {
+        if (!out.records.length) { Core.toast('The tool has no shared data yet.'); return; }
+        Core.download(tile + '-data-' + new Date().toISOString().slice(0, 10) + '.json', new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+      }).catch(function (err) { Core.showError(err); });
+    });
     $('#clear').addEventListener('click', function () { chosen = []; showChosen(); Core.clear($('#upload-notes')); });
     $('#send').addEventListener('click', function (ev) {
       $('#upload-error').hidden = true; Core.clear($('#upload-notes'));

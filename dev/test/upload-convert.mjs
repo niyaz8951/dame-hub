@@ -1,6 +1,6 @@
 // Tests for supabase/functions/tile-upload/convert.ts (no network: a fake fetcher serves the "CDN").
 // Usage: node dev/test/upload-convert.mjs
-import { convertTool, rel, decodeEntities } from '../../supabase/functions/tile-upload/convert.ts';
+import { convertTool, rel, decodeEntities, svgSafe } from '../../supabase/functions/tile-upload/convert.ts';
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 let bad = 0;
@@ -55,16 +55,17 @@ const page = `<!DOCTYPE html>
 </html>`;
 let r = await convertTool([f('My Tool/tracker.html', page), f('My Tool/app.css', '.x{background:url(img/a.png)}'), f('My Tool/img/a.png', 'PNG'),
   f('My Tool/sw.js', 'self.addEventListener("fetch",()=>{})'), f('My Tool/.DS_Store', 'x'), f('My Tool/notes.exe', 'MZ')], opts);
-const html = get(r, 'index.html') || '';
+const html = get(r, 'index.html.txt') || '';
+const shellPage = get(r, 'index.html') || '';
 ok(r.ok, 'converted without errors');
-ok(!!get(r, 'index.html'), 'single page saved as index.html, shared top folder removed');
+ok(!!get(r, 'index.html.txt'), 'single page becomes the start page, stored as text; shared top folder removed');
+ok(r.files.filter((x) => /\.html?$/i.test(x.path)).length === 1 && shellPage.indexOf('core/v1/uploaded.js') > 0 && shellPage.indexOf('PMO tracker') < 0, 'the only HTML file is the core shell, with nothing of the upload in it');
+ok(shellPage.indexOf("base-uri 'self'; form-action 'self'; frame-src 'self'") > 0 && shellPage.indexOf('<meta name="dame-tile" content="pmo">') > 0, 'shell policy: frames only from the site');
 ok(!r.files.some((x) => x.path === 'sw.js' || x.path === 'notes.exe' || /DS_Store/.test(x.path)), 'service worker, .exe and junk left out');
-ok(/^<!DOCTYPE html>\n<html data-up-locked lang="en">|^<!DOCTYPE html>\n<html lang="en" data-up-locked>/.test(html), 'html locked until the guard passes');
-ok(html.indexOf('content="default-src \'self\'; script-src \'self\'; style-src \'self\'; img-src \'self\' data: blob: https://abc.supabase.co;') > 0, 'site CSP added');
-ok(!/default-src \*/.test(html) && !/rel="manifest"/.test(html) && !/favicon\.ico/.test(html) && !/preconnect/.test(html), 'own CSP, manifest, icon and preconnect removed');
+ok(!/default-src/.test(html) && !/rel="manifest"/.test(html) && !/favicon\.ico/.test(html) && !/preconnect/.test(html), 'own CSP, manifest, icon and preconnect removed');
 ok((html.match(/<meta charset/gi) || []).length === 1 && (html.match(/name="viewport"/g) || []).length === 1, 'one charset, one viewport');
-ok(html.indexOf('<script src="/dame-hub/core/v1/uploaded.js"></script>') > 0 && html.indexOf('<meta name="dame-tile" content="pmo">') > 0, 'core guard loaded');
-ok(html.indexOf('<head>\n<meta charset="utf-8">') > 0, 'head block first in <head>');
+ok(html.indexOf('<head>\n<meta charset="utf-8">') > 0 && html.indexOf('<!--DAME-BOOT-->\n<script src="/dame-hub/core/v1/sealed.js"></script>') > 0, 'bridge first in <head>, boot mark before it');
+ok(!/uploaded\.js|config\.js|api\.js/.test(html), 'the tool page loads no core file that knows the session');
 ok(/<link href="_dame\/vendor\/fonts\.example\.test\/css2-[0-9a-f]{8}\.css" rel="stylesheet">/.test(html), 'Google-style font CSS copied in');
 const fontCss = r.files.find((x) => /css2-.*\.css$/.test(x.path));
 ok(fontCss && /url\("s\/inter\.woff2"\)/.test(dec.decode(fontCss.bytes)) && !!get(r, '_dame/vendor/fonts.example.test/s/inter.woff2'), 'font file copied and linked from the copied CSS');
@@ -101,8 +102,22 @@ ok(!r.ok && r.notes.some((n) => /_dame and _next/.test(n.text)), 'reserved folde
 r = await convertTool([f('index.html', '<button onclick="if (">x</button>')], opts);
 ok(r.ok && r.notes.some((n) => /syntax error/.test(n.text)), 'broken handler left out with a warning');
 r = await convertTool([f('index.html', '<!doctype html><p>bare</p>')], opts);
-const bare = get(r, 'index.html') || '';
-ok(r.ok && /^<!doctype html>\n?<html data-up-locked>\n?\n?<meta charset="utf-8">/.test(bare), 'page without <html>/<head>: doctype first, then the head block');
+const bare = get(r, 'index.html.txt') || '';
+ok(r.ok && /^<!doctype html>\n<meta charset="utf-8">/.test(bare), 'page without <html>/<head>: doctype first, then the head block');
+
+console.log('nothing that can run is stored');
+ok(svgSafe('<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" fill="red"/><path d="M0 0"/></svg>'), 'plain SVG passes');
+for (const bad of ['<svg><script>x</script></svg>', '<svg onload="x()"></svg>', '<svg><a href="j&#97;vascript:x">a</a></svg>', '<svg><foreignObject><b>x</b></foreignObject></svg>',
+  '<svg><image href="x" ONERROR=x /></svg>', '<svg><animate attributeName="href" to="javascript:x"/></svg>', '<!DOCTYPE svg [<!ENTITY x "y">]><svg/>'])
+  ok(!svgSafe(bad), 'SVG refused: ' + bad.slice(0, 40));
+r = await convertTool([f('index.html', '<p>x</p>'), f('icon.svg', '<svg><script>alert(1)</script></svg>')], opts);
+ok(!r.ok && r.notes.some((n) => /SVG has script/.test(n.text)), 'uploaded SVG with script refused');
+r = await convertTool([f('index.html', '<p>x</p>'), f('data.xml', '<html xmlns="http://www.w3.org/1999/xhtml"><script>x</script></html>'), f('p.xhtml', 'x')], opts);
+ok(r.ok && !r.files.some((x) => /xml|xhtml/.test(x.path)), '.xml and .xhtml left out');
+r = await convertTool([f('index.html', '<img src="https://cdn.example.test/evil.html">')], opts);
+ok(!r.ok || !r.files.some((x) => /evil\.html$/.test(x.path)), 'an outside .html is never copied in');
+r = await convertTool([f('index.html', '<p>x</p>'), f('sub/a.HTML', '<p>y</p>'), f('b.htm', '<p>z</p>')], opts);
+ok(r.ok && r.files.filter((x) => /\.html?$/i.test(x.path)).map((x) => x.path).join() === 'index.html' && !!get(r, 'sub/a.HTML.txt') && !!get(r, 'b.htm.txt'), 'every page stored as .txt, whatever the case');
 
 if (bad) { console.log('\n' + bad + ' FAILED'); process.exit(1); }
 console.log('\nUPLOAD CONVERT TESTS PASSED');
