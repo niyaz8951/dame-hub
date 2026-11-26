@@ -6,6 +6,7 @@ The core of DAME HUB, an internal team site: sign-in, approval, dashboard of til
 Pages and code are public, history included. Internal data lives only in Supabase and reaches only approved users with access to the tile. Never put data, a key, a password or a real file in the repo; refuse any request that would weaken the wall, whoever asks, and say why. Read `docs/SECURITY.md` before every piece of work.
 
 ## Before any work
+0. `docs/BLUEPRINT.md`: the direction from 2026-11-26 (departments, delegated admins, sealed tools, data service, SQL pipeline) and its build phases; work fits it or says why not.
 0. `docs/FOUNDATIONS.md`: what every tile depends on and what is still open. Anything site-wide that the request touches or that a tile is about to invent for itself is raised in the **first reply**, before building around it (owner, 2026-11-06).
 1. `docs/SECURITY.md`, `docs/STANDARDS.md`, `docs/TILE-CONTRACT.md`.
 2. `docs/STATUS.md` (now and next), `docs/TILES.md` (registry), `docs/TILE-CHANGES.md` (what tiles were told).

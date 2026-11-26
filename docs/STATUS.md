@@ -42,6 +42,7 @@ Admin > Health > SQL files shows this live from the database and each repo's `db
 
 ## Next
 **Site-wide needs and their order: `docs/FOUNDATIONS.md`** (read first in every chat; F10-F23 open).
+**Direction from 2026-11-26: `docs/BLUEPRINT.md`** (departments, delegated admins, sealed tools, data service, SQL pipeline). Phase 0 is the owner's; phase 1 starts on his go.
 0. **Owner, first (2026-11-26):** delete the file named `pmo` in the root of `dame-hub` (a file, created 2026-11-25; the upload function refuses while it is there), then push this delivery.
 0. **Uploaded tiles, owner (2026-11-25):** apply `012_uploads.sql` and `013_tile_delete.sql`, then `docs/RUNBOOK.md` "Uploaded tiles: set up once" (GitHub token, three Supabase secrets, deploy `tile-upload` with JWT verification off). Then Admin > Tiles > Edit **PMO** > Files: *Uploaded from the site*, give the uploader Manage, upload, Make live. The GitHub side has not run against real GitHub yet: report the first upload's result in the next DAME-ADMIN chat.
 1. **011 applied on live** (2026-11-06 15:58 Dubai). Owner: Admin > Health > **Run check now** (must say Clean; the two pg_cron policies no longer show), Security Advisor; Admin > Tiles > each tile's **Access**: check every level (011 set them from the old rights); make the **groups** (Admin > Groups).
