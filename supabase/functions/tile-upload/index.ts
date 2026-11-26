@@ -96,6 +96,7 @@ class GitHubStore implements Store {
       if (own && own.type !== 'tree') throw new Fail('GITHUB', 'A file with the tile\'s name is in the way in the repo.', 409);
       const tileEntries = own ? await this.entries(own.sha!) : null;
       const newTile = await fn(tileEntries, head);
+      if (newTile === null && !own) return head.commit;   // nothing to delete
       const rootTree = await this.tree([{ path: tile, mode: '040000', type: 'tree', sha: newTile }], head.tree);
       const commit = await this.gh('POST', '/git/commits', { message, tree: rootTree, parents: [head.commit] });
       try {
@@ -129,6 +130,9 @@ class GitHubStore implements Store {
       const keep = (own || []).filter((e) => e.path !== '_next');
       return keep.length ? this.tree(keep) : null;   // null: the tile folder goes (nothing was live)
     });
+  }
+  async remove(tile: string): Promise<string> {
+    return this.change(tile, tile + ': remove the uploaded files (tile deleted)', async () => null);
   }
   async rollback(tile: string, liveCommit: string): Promise<string> {
     if (!/^[0-9a-f]{40}$/.test(liveCommit)) throw new Fail('NOT_FOUND', 'That version cannot be restored.', 404);

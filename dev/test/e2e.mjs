@@ -119,10 +119,11 @@ try {
   await page.waitForSelector('#tiles table');
   await page.click('#tile-new');
   await page.waitForSelector('.sheet');
-  await page.fill('#tf-id', 'hvac-notes'); await page.fill('#tf-name', 'HVAC Notes'); await page.fill('#tf-tagline', 'Notes for the team'); await page.selectOption('#tf-icon', 'notes'); await page.fill('#tf-rights', 'edit, reply');
+  await page.selectOption('#tf-hosting', 'repo'); await page.fill('#tf-id', 'hvac-notes'); await page.fill('#tf-name', 'HVAC Notes'); await page.fill('#tf-tagline', 'Notes for the team'); await page.selectOption('#tf-icon', 'notes'); await page.fill('#tf-rights', 'edit, reply');
   await page.click('.sheet .actions button.primary');
   await page.waitForFunction(() => document.querySelectorAll('#tiles tbody tr').length === 2);
   await expect(true, 'new tile created');
+  await page.locator('.sheet button', { hasText: 'Close' }).click(); await page.waitForSelector('.sheet', { state: 'detached' });   // the next-steps sheet
   await expect((await page.textContent('#tiles')).includes('edit, reply'), 'rights saved');
   // invalid id shows error in the sheet
   await page.click('#tile-new'); await page.waitForSelector('.sheet');

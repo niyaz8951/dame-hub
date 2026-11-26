@@ -1,4 +1,4 @@
--- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 012). Everything is rolled back.
+-- DAME core tests. Run on STAGING in the SQL editor, as one script, after every db/core file (001 to 013). Everything is rolled back.
 -- Expected output: one notice per group ending in "ok", then "ALL CORE TESTS PASSED". Any failure stops with ERROR.
 begin;
 
@@ -659,6 +659,40 @@ begin
     reset role;
   end;
   raise notice 'uploads (012) ok';
+
+  -- ---- 013: delete a tile
+  begin
+    perform pg_temp.act_as('t.admin'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_admin_tile_plan('u-tile')$q$, 'NO_RIGHT');
+    perform pg_temp.expect_error($q$select public.core_admin_tile_delete('u-tile', 'u-tile')$q$, 'NO_RIGHT');
+    perform pg_temp.act_as(null);
+    perform pg_temp.expect_error($q$select public.core_admin_tile_delete('u-tile', 'u-tile')$q$, 'PERMISSION');
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    perform pg_temp.expect_error($q$select public.core_admin_tile_delete('ghost', 'ghost')$q$, 'NOT_FOUND');
+    perform pg_temp.expect_error($q$select public.core_admin_tile_delete('u-tile', 'wrong')$q$, 'INVALID:confirm');
+    v := public.core_admin_tile_plan('u-tile');
+    if (v ->> 'people')::int <> 2 or (v ->> 'releases')::int <> 4 or (v -> 'data' ->> 'blocked')::boolean then raise exception 'plan %', v; end if;
+    reset role;
+    create schema u_tile; create table u_tile.x (id int);
+    create function public.u_tile_list() returns int language sql as 'select 1';
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    v := public.core_admin_tile_plan('u-tile');
+    if v -> 'data' ->> 'schema' <> 'u_tile' or (v -> 'data' ->> 'tables')::int <> 1 or v -> 'data' -> 'functions' ->> 0 not like '%u_tile_list()' then raise exception 'leftovers %', v; end if;
+    perform pg_temp.expect_error($q$select public.core_admin_tile_delete('u-tile', 'u-tile')$q$, 'INVALID:data');
+    reset role;
+    drop function public.u_tile_list(); drop schema u_tile cascade;
+    insert into core.containers (tile_id, kind, id, name) values ('u-tile', 'kk', '1', 'One');
+    insert into core.shares (tile_id, kind, id, user_id, level) select 'u-tile', 'kk', '1', id, 'read' from t_ids where k = 't.user';
+    perform pg_temp.act_as('t.super'); perform public.core_session_start();
+    v := public.core_admin_tile_delete('u-tile', 'u-tile');
+    if (v ->> 'people')::int <> 2 then raise exception 'delete %', v; end if;
+    perform pg_temp.expect_error($q$select public.core_admin_tile_plan('u-tile')$q$, 'NOT_FOUND');
+    reset role;
+    if exists (select 1 from core.tile_access where tile_id = 'u-tile') or exists (select 1 from core.tile_releases where tile_id = 'u-tile')
+       or exists (select 1 from core.shares where tile_id = 'u-tile') then raise exception 'rows left'; end if;
+    if not exists (select 1 from core.audit where tile_id = 'u-tile' and action = 'tile_delete') then raise exception 'delete audit'; end if;
+  end;
+  raise notice 'tile delete (013) ok';
 
   -- ---- 011: the security check passes pg_cron's own two policies, and only those, only in pg_cron's shape
   if exists (select 1 from core.security_check() where object like 'cron.%') then raise exception 'pg_cron policies reported'; end if;

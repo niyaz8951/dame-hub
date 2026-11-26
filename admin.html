@@ -15,6 +15,7 @@
 <script src="/dame-hub/core/v1/api.js" defer></script>
 <script src="/dame-hub/core/v1/core.js" defer></script>
 <script src="/dame-hub/assets/hub-access.js" defer></script>
+<script src="/dame-hub/assets/hub-tool-guide.js" defer></script>
 <script src="/dame-hub/assets/hub-admin.js" defer></script>
 </head>
 <body>
@@ -54,7 +55,7 @@
 
   <section id="tab-tiles" hidden>
     <div class="row between">
-      <p class="muted grow">A tile is a sibling repo served at <code>/&lt;tile-id&gt;/</code>. Register it here, then give people and groups a level in Access; it stays hidden until switched on.</p>
+      <p class="muted grow">A tile is either <b>uploaded from the site</b> (ready HTML files, at <code>/dame-hub/&lt;tile-id&gt;/</code>) or <b>built in its own repo</b> (at <code>/&lt;tile-id&gt;/</code>). Make it here, give people and groups a level in Access; it stays hidden until switched on. Edit also deletes a tile.</p>
       <button class="btn primary" type="button" id="tile-new">New tile</button>
     </div>
     <div id="tiles" class="table-wrap"></div>

@@ -71,11 +71,14 @@ Admin page > Tiles > the switch. Off: the tile disappears from every dashboard a
    - `DAME_GITHUB_TOKEN` = the token
    - `DAME_GITHUB_REPO` = `<account>/dame-hub` (today `niyaz8951/dame-hub`)
    - `DAME_SITE_ORIGINS` = `https://<account>.github.io` (today `https://niyaz8951.github.io`; add `,http://localhost:8080` only while testing locally)
-4. **Deploy the function** `tile-upload`, its three files from `supabase/functions/tile-upload/` (`index.ts`, `handler.ts`, `convert.ts`):
+4. **Deploy the function** `tile-upload` (again after every delivery that changes `supabase/functions/`), its three files from `supabase/functions/tile-upload/` (`index.ts`, `handler.ts`, `convert.ts`):
    - Dashboard: Edge Functions > Deploy a new function > Via editor, name `tile-upload`, create the three files with the same names and paste each from the repo, Deploy. Or with the Supabase CLI from a clone of `dame-hub`: `supabase functions deploy tile-upload --no-verify-jwt --project-ref <project-ref>`.
    - Then the function's **Details > Enforce JWT verification: off** (the CLI flag does the same). The function checks the session itself, with the database, before it reads anything (`handler.ts`).
 5. **Check**: Admin > Tiles > Edit a test tile (or PMO) > Files: *Uploaded from the site*, give yourself Manage, open it from the dashboard, upload one `index.html`, wait a minute, Open the preview, Make live. GitHub shows two commits named `<tile>: ...` in `dame-hub`.
 If `main` ever gets a ruleset that requires pull requests, uploads stop (the function pushes to `main`): add the token's account to the ruleset's bypass list, or keep that rule off `main`.
+
+## Delete a tile
+Admin > Tiles > Edit > **Delete tile**, type the id. It removes the tile, everyone's access to it, its shared items and upload versions, and for an uploaded tile the folder `dame-hub/<tile-id>/` (if GitHub cannot be reached it says so and you delete the folder by hand). A tile with data of its own (schema, functions, bucket) is refused: the dialog shows the SQL; export what must be kept, run it in the SQL editor, empty and delete the bucket in the dashboard, then delete the tile. Archive or delete the tile's repo on GitHub yourself. The audit keeps the history.
 
 ## Uploaded tiles: day to day
 - **Who uploads**: the tile's managers (Admin > Tiles > Access, level Manage). The Files page: dashboard tile while nothing is live, the DAME bar's **Files**, Admin > Tiles > **Files**.

@@ -7,6 +7,7 @@
 //   action=live      release                                  -> the preview replaces dame-hub/<tile>/
 //   action=discard                                            -> deletes dame-hub/<tile>/_next/
 //   action=rollback  release                                  -> dame-hub/<tile>/ as it was when that release was live
+//   action=remove                                             -> deletes dame-hub/<tile>/ (super user only; before a tile is deleted)
 // Every action asks the database first (core_upload_check: signed in, approved, manager of an uploaded tile), before
 // the body is even read; then changes the files; then records it (core_upload_*). The database never holds the files.
 
@@ -18,6 +19,7 @@ export interface Store {
   makeLive(tile: string): Promise<string>;
   discard(tile: string): Promise<string>;
   rollback(tile: string, liveCommit: string): Promise<string>;
+  remove(tile: string): Promise<string>;
 }
 export type Env = { supabaseUrl: string; store: Store; fetcher: Fetcher; origins: string[] };
 
@@ -92,7 +94,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || '';
     const tile = url.searchParams.get('tile') || '';
-    if (['upload', 'live', 'discard', 'rollback'].indexOf(action) < 0) throw new Fail('INVALID:action', 'Unknown action.');
+    if (['upload', 'live', 'discard', 'rollback', 'remove'].indexOf(action) < 0) throw new Fail('INVALID:action', 'Unknown action.');
     if (!/^[a-z0-9][a-z0-9-]{1,29}$/.test(tile) || RESERVED.indexOf(tile) >= 0) throw new Fail('INVALID:id', 'Not a tile id.');
     const check = await rpc(env, req, 'core_upload_check', { p_tile: tile });   // nothing is read before this passes
     const length = Number(req.headers.get('content-length') || 0);
@@ -123,6 +125,11 @@ export async function handle(req: Request, env: Env): Promise<Response> {
       const commit = await env.store.discard(tile);
       const release = await rpc(env, req, 'core_upload_discard', { p_tile: tile, p_commit: commit });
       return reply(200, { ok: true, release }, h);
+    }
+    if (action === 'remove') {
+      if (!check.is_super) throw new Fail('NO_RIGHT', 'NO_RIGHT', 403);
+      const commit = await env.store.remove(tile);
+      return reply(200, { ok: true, commit }, h);
     }
     if (action === 'rollback') {
       const list: any[] = await rpc(env, req, 'core_upload_list', { p_tile: tile });

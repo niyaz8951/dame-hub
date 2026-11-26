@@ -20,6 +20,7 @@ Kept in the admin repo as `docs/FOUNDATIONS.md`. The things every tile depends o
 | F7 | Tile contract, registry, SQL lists, core requests, changes for tiles | `docs/TILE-CONTRACT.md`, `docs/TILES.md`, `docs/TILE-CHANGES.md` |
 | F8 | Portability: no account name in code or data; moving account, going private | `docs/MOVE-ACCOUNT.md` |
 | F9 | Data class: technical data only, nothing personal beyond username and display name (owner, 2026-11-06) | `docs/SECURITY.md` 1 |
+| F25 | **Spaces and delegated admin, OPEN (owner, 2026-11-26)**: a tile can be a whole team with tiles inside it; the super user is site level; a tile's admin is super user of that tile and names more admins. Changes the fixed decisions (who names managers, who creates tiles); design agreed before any code | next DAME-ADMIN chat |
 | F24 | **Uploaded tiles**: a tile's managers upload plain HTML tools from the site; converted to the rules, preview, Make live, versions; files in the repo, the record in the database (owner, 2026-11-25) | `docs/STANDARDS.md` 13, `db/core/012`, `supabase/functions/tile-upload` |
 
 ## Open, in the order to do them

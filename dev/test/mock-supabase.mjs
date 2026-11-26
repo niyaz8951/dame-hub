@@ -73,6 +73,7 @@ const folderStore = {
     if (!(await readdir(dir).catch(() => [])).length) await rm(dir, { recursive: true, force: true });
     return fakeSha();
   },
+  async remove(tile) { await rm(join(hub, tile), { recursive: true, force: true }); return fakeSha(); },
   async rollback(tile, commit) {
     const files = snapshots.get(commit); if (!files) throw new Error('unknown commit');
     const dir = join(hub, tile); await rm(dir, { recursive: true, force: true }); await writeTree(dir, files);

@@ -424,7 +424,7 @@
 
   function tileForm(t) {
     var isNew = !t;
-    t = t || { id: '', name: '', tagline: '', icon: 'tile', accent: 'blue', sort_order: 100, rights: [], hosting: 'repo' };
+    t = t || { id: '', name: '', tagline: '', icon: 'tile', accent: 'blue', sort_order: 100, rights: [], hosting: 'upload' };
     function field(id, label, value, hint, attrs) {
       var input = el('input', Object.assign({ id: 'tf-' + id, value: value }, attrs || {}));
       return el('div', { class: 'field' }, el('label', { for: 'tf-' + id, text: label }), input, hint ? el('span', { class: 'hint', text: hint }) : null);
@@ -434,13 +434,16 @@
     var accentSel = el('select', { id: 'tf-accent' });
     Core.ACCENTS.forEach(function (c) { accentSel.appendChild(el('option', { value: c, text: c, selected: c === t.accent })); });
     var hostSel = el('select', { id: 'tf-hosting' },
-      el('option', { value: 'repo', text: 'Built in its own repo (a tile team with its Claude project)', selected: t.hosting !== 'upload' }),
-      el('option', { value: 'upload', text: 'Uploaded from the site (HTML, CSS, JS files; Files page)', selected: t.hosting === 'upload' }));
+      el('option', { value: 'upload', text: 'Uploaded from the site: a ready HTML tool, no data of its own', selected: t.hosting === 'upload' }),
+      el('option', { value: 'repo', text: 'Built in its own repo: needs a database or a team with its Claude project', selected: t.hosting !== 'upload' }));
+    var hostField = el('div', { class: 'field' }, el('label', { for: 'tf-hosting', text: 'How is this tile made?' }), hostSel,
+      el('span', { class: 'hint', text: 'Uploaded: the tile\'s managers upload the files on its Files page; it opens at /dame-hub/<tile-id>/. Own repo: it opens at /<tile-id>/ (docs/NEW-TILE.md).' }));
     var swatch = el('span', { class: 'icon i-' + t.icon, 'aria-hidden': 'true', 'data-accent': Core.accent(t.accent) });
     function preview() { swatch.className = 'icon i-' + iconSel.value; swatch.setAttribute('data-accent', accentSel.value); }
     iconSel.addEventListener('change', preview); accentSel.addEventListener('change', preview);
     var err = el('p', { class: 'notice danger', hidden: true });
     var body = el('div', null,
+      isNew ? hostField : null,
       field('id', 'Tile id', t.id, 'Lower case, digits and dashes; the repo (or folder) name and the path. Cannot change later.', { maxlength: 30, disabled: !isNew, autocapitalize: 'none', spellcheck: 'false' }),
       field('name', 'Name', t.name, null, { maxlength: 40 }),
       field('tagline', 'Tagline', t.tagline, 'Neutral, one line.', { maxlength: 80 }),
@@ -449,8 +452,7 @@
         el('div', { class: 'field grow' }, el('label', { for: 'tf-accent', text: 'Colour' }), accentSel, el('span', { class: 'hint', text: 'The tile\'s hue on the dashboard and inside it.' })),
         el('div', { class: 'field' }, el('label', { text: 'Preview' }), swatch)),
       field('order', 'Order', String(t.sort_order), 'Lower comes first on the dashboard.', { type: 'number', min: 0, max: 9999 }),
-      el('div', { class: 'field' }, el('label', { for: 'tf-hosting', text: 'Files' }), hostSel,
-        el('span', { class: 'hint', text: 'Uploaded: the tile\'s managers upload the files on the Files page; they go to dame-hub/<tile-id>/ and the tile opens at /dame-hub/<tile-id>/. Own repo: the tile opens at /<tile-id>/.' })),
+      isNew ? null : hostField,
       declared(t)
         ? el('div', { class: 'field' }, el('label', { text: 'Access' }),
             el('p', { class: 'muted', text: 'Declared by the tile (levels, aliases' + (t.rights.length ? ', special rights ' + t.rights.join(', ') : '') + '). It changes only through the tile\'s own SQL file (core.tile_declare).' }),
@@ -458,6 +460,7 @@
         : field('rights', 'Rights', t.rights.join(', '), 'Only until the tile declares itself (core.tile_declare). Comma-separated. Removing one removes it from every person and group.', { autocapitalize: 'none', spellcheck: 'false' }),
       err);
     Core.sheet({ title: isNew ? 'New tile' : 'Edit ' + t.name, body: body, actions: [
+      isNew ? null : { label: 'Delete tile', kind: 'danger', onClick: function () { window.setTimeout(function () { deleteTile(t); }, 0); return true; } },
       { label: 'Cancel', value: false },
       { label: 'Save', kind: 'primary', onClick: function () {
         var params = { p_id: isNew ? body.querySelector('#tf-id').value : t.id, p_name: body.querySelector('#tf-name').value,
@@ -465,9 +468,82 @@
           p_sort_order: parseInt(body.querySelector('#tf-order').value, 10) || 100,
           p_rights: body.querySelector('#tf-rights').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
           p_hosting: hostSel.value };
-        return Api.rpc('core_admin_tile_save', params).then(function () { Core.toast('Saved', 'success'); loadTiles(); return true; },
+        return Api.rpc('core_admin_tile_save', params).then(function (saved) {
+          Core.toast('Saved', 'success'); loadTiles();
+          if (isNew) window.setTimeout(function () { nextSteps(saved.id, params.p_name.trim(), saved.hosting); }, 0);
+          return true; },
           function (ex) { err.textContent = Api.errorMessage(ex); err.hidden = false; return false; });
-      } }] });
+      } }].filter(Boolean) });
+  }
+
+  // After a new tile is saved: what to do next, for its kind. Uploaded tiles get the rules and the AI prompt.
+  function nextSteps(id, name, hosting) {
+    var steps = hosting === 'upload' ? [
+      'Access: give people and groups their level. Name whoever uploads the files as Manage; only someone you would trust as a repo collaborator.',
+      'Upload the files on the Files page (button below), open the preview, then Make live.',
+      'Switch the tile on in this list. Until something is live, users see "Not ready yet".'
+    ] : [
+      'GitHub: a new public repo named ' + id + ' in the account, Pages on (main, root), secret scanning on, the team as collaborators.',
+      'Claude project "DAME - ' + name + '": copy the template from docs/NEW-TILE.md, fill in the tile id, connect the tile repo and dame-hub.',
+      'The team builds; you read and apply its SQL files, then Health > Run check now.',
+      'Access: give people their level and name the tile\'s manager. Then switch the tile on.'
+    ];
+    var list = el('ol', { class: 'guide-rules' });
+    steps.forEach(function (s) { list.appendChild(el('li', { text: s })); });
+    var body = el('div', null, el('p', { class: 'muted', text: hosting === 'upload' ? 'An uploaded tile: ready HTML files, at /dame-hub/' + id + '/.' : 'A tile built in its own repo, at /' + id + '/.' }),
+      list, hosting === 'upload' ? HubGuide.box(name) : null);
+    var actions = [{ label: 'Close', value: false }, { label: 'Give access', value: 'access' }];
+    if (hosting === 'upload') actions.push({ label: 'Upload files', kind: 'primary', value: 'files' });
+    Core.sheet({ title: name + ': next steps', body: body, actions: actions }).then(function (v) {
+      if (v === 'files') Core.go(Core.CORE + '/upload.html?tile=' + encodeURIComponent(id));
+      else if (v === 'access') openAccess({ id: id, name: name });
+    });
+  }
+
+  // Delete a tile: shows what goes, asks for the id, removes the uploaded files from the repo, then the tile.
+  function deleteTile(t) {
+    Api.rpc('core_admin_tile_plan', { p_id: t.id }).then(function (plan) {
+      var d = plan.data, err = el('p', { class: 'notice danger', hidden: true });
+      if (d.blocked) {
+        var schema = d.schema || t.id.replace(/-/g, '_');
+        var sql = '-- Removes the data of tile ' + t.id + '. Read it, export what must be kept, then run it in the SQL editor.\n' +
+          (d.functions || []).map(function (f) { return 'drop function if exists ' + f + ';'; }).join('\n') + (d.functions.length ? '\n' : '') +
+          (d.schema ? 'drop schema if exists ' + schema + ' cascade;\n' : '') +
+          (d.bucket ? '-- Storage > bucket "' + d.bucket + '": empty it and delete it in the Supabase dashboard (SQL cannot).\n' : '');
+        var area = el('textarea', { class: 'guide-prompt mono', readonly: true, rows: 8 }); area.value = sql;
+        Core.sheet({ title: 'Delete ' + t.name, body: el('div', null,
+          el('p', { text: t.name + ' has data of its own: ' + [d.schema ? 'schema ' + d.schema + ' (' + d.tables + ' tables)' : null, d.functions.length ? d.functions.length + ' functions' : null, d.bucket ? 'bucket ' + d.bucket : null].filter(Boolean).join(', ') + '.' }),
+          el('p', { class: 'muted', text: 'The site never drops data by itself. Run this in the Supabase SQL editor after reading it, then delete the tile here. Afterwards archive or delete the repo ' + t.id + ' on GitHub.' }),
+          area), actions: [{ label: 'Close', value: false }] });
+        return;
+      }
+      var goes = [plan.people + ' people and ' + plan.groups + ' groups lose access', plan.containers ? plan.containers + ' shared items and their sharing' : null,
+        plan.releases ? plan.releases + ' upload versions' + (plan.files ? ' and the files in dame-hub/' + t.id + '/' : '') : null].filter(Boolean);
+      var input = el('input', { id: 'td-confirm', autocapitalize: 'none', spellcheck: 'false', autocomplete: 'off' });
+      var anyway = false;
+      var body = el('div', null,
+        el('p', { text: 'This removes the tile ' + t.name + ' for everyone and cannot be undone:' }),
+        el('ul', { class: 'guide-rules' }, goes.map(function (g) { return el('li', { text: g }); })),
+        el('p', { class: 'muted', text: 'The audit keeps its history.' + (plan.hosting === 'repo' ? ' A repo named ' + t.id + ', if there is one, stays on GitHub: archive or delete it there.' : '') }),
+        el('div', { class: 'field' }, el('label', { for: 'td-confirm', text: 'Type the tile id (' + t.id + ') to confirm' }), input), err);
+      Core.sheet({ title: 'Delete ' + t.name, body: body, actions: [
+        { label: 'Cancel', value: false },
+        { label: 'Delete tile', kind: 'danger', onClick: function () {
+          if (input.value.trim() !== t.id) { err.textContent = 'Type the tile id exactly: ' + t.id; err.hidden = false; return false; }
+          var files = plan.hosting === 'upload' && plan.files && !anyway
+            ? Api.fn('tile-upload?tile=' + encodeURIComponent(t.id) + '&action=remove', new FormData()) : Promise.resolve();
+          return files.then(function () {
+            return Api.rpc('core_admin_tile_delete', { p_id: t.id, p_confirm: t.id }).then(function () {
+              Core.toast(t.name + ' deleted' + (anyway ? '. Remove the folder dame-hub/' + t.id + '/ on GitHub.' : ''), 'success'); loadTiles(); return true; });
+          }).catch(function (ex) {
+            if (!anyway && plan.hosting === 'upload' && plan.files && !(ex && /^INVALID|NO_RIGHT|NOT_FOUND/.test(ex.code || ''))) {
+              anyway = true;
+              err.textContent = 'The files could not be removed from the repo (' + Api.errorMessage(ex) + '). Press Delete tile again to delete the tile anyway; then remove the folder dame-hub/' + t.id + '/ on GitHub yourself.';
+            } else err.textContent = Api.errorMessage(ex);
+            err.hidden = false; return false;
+          });
+        } }] });
+    }).catch(function (ex) { Core.showError(ex); });
   }
 
   function openAccess(t) {

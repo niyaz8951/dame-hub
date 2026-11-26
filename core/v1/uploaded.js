@@ -118,7 +118,11 @@
   function start() {
     if (!tile || tile !== pathTile) { gate('Nothing here', 'This page is not in its tile\'s folder.'); return; }
     if (!Api.auth.session()) { toLogin(); return; }
-    Api.rpc('core_me', { p_tile: tile }).then(function (me) {
+    // A preview is for the tile's managers, also while the tile is still switched off: the upload check decides.
+    var ask = preview
+      ? Api.rpc('core_upload_check', { p_tile: tile }).then(function (c) { return { status: 'active', is_super: c.is_super, level: 'manage', tile: { name: c.name } }; })
+      : Api.rpc('core_me', { p_tile: tile });
+    ask.then(function (me) {
       if (me.status === 'disabled') { toLogin(); return; }
       if (me.must_change_password) { window.location.assign(CORE + '/account.html?change=1'); return; }
       if (preview && !me.is_super && me.level !== 'manage') { gate('Nothing here', 'This preview is only for the tile\'s managers.'); return; }
@@ -128,6 +132,7 @@
       var code = err && err.code;
       if (code === 'SIGNED_OUT') { toLogin(); return; }
       if (code === 'NOT_APPROVED') gate('Waiting for approval', Api.messages.NOT_APPROVED);
+      else if (preview && (code === 'NO_ACCESS' || code === 'NO_RIGHT' || code === 'NOT_FOUND')) gate('Nothing here', 'This preview is only for the tile\'s managers.');
       else if (code === 'NO_ACCESS' || code === 'NO_RIGHT') gate('Nothing here', 'There is nothing here for you.');
       else gate('Cannot load', Api.errorMessage(err), { href: window.location.pathname, label: 'Try again' });
     });

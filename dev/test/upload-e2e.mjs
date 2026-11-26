@@ -3,7 +3,7 @@
 // folder of this repo (pmo/) as the store. Usage (mock running, seed applied): node dev/test/upload-e2e.mjs
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 const require = createRequire(process.env.PLAYWRIGHT_ROOT || import.meta.url);
 const { chromium } = require('playwright');
 const B = 'http://localhost:8080';
@@ -14,7 +14,7 @@ const log = (s) => { step = s; console.log('• ' + s); };
 const expect = (c, m) => { if (c) console.log('  ✓ ' + m); else { errors.push(step + ': ' + m); console.log('  ✗ ' + m); } };
 
 rmSync(new URL('../../pmo', import.meta.url), { recursive: true, force: true });
-psql(`delete from core.tiles where id = 'pmo'`); psql(`delete from core.audit where tile_id = 'pmo'`);
+psql(`delete from core.tiles where id in ('pmo', 'spp')`); psql(`delete from core.audit where tile_id = 'pmo'`);
 psql(`update core.profiles set status = 'active' where username in ('demo_admin', 'demo_viewer', 'demo_none')`);   // the main e2e disables demo_none
 psql(`insert into core.tiles (id, name, tagline, icon, accent, sort_order, enabled, hosting) values ('pmo', 'PMO', 'Project office', 'chart', 'violet', 5, true, 'upload')`);
 psql(`insert into core.tile_access (user_id, tile_id, level) select id, 'pmo', case username when 'demo_admin' then 'manage' else 'read' end from core.profiles where username in ('demo_admin', 'demo_viewer')`);
@@ -41,14 +41,14 @@ writeFileSync(dir + '/tracker.html', tool('v1'));
 writeFileSync(dir + '/pages/more.html', '<!doctype html><title>More</title><p id="m">More page</p><a href="../index.html">Back</a>');
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
-async function as(user, viewport) {
+async function as(user, viewport, pass) {
   const ctx = await browser.newContext({ viewport: viewport || { width: 1100, height: 800 } });
   const page = await ctx.newPage();
   page.csp = 0;
   page.on('console', (m) => { if (m.type() === 'error') { if (/Content Security Policy/.test(m.text())) page.csp++; else if (!/40[034]|422/.test(m.text())) errors.push(step + ': console ' + m.text()); } });
   page.on('pageerror', (e) => errors.push(step + ': pageerror ' + e.message));
   await page.goto(B + '/dame-hub/');
-  await page.fill('#si-email', user + '@example.com'); await page.fill('#si-pass', 'DemoPass2026'); await page.click('#signin button[type=submit]');
+  await page.fill('#si-email', user.indexOf('@') > 0 ? user : user + '@example.com'); await page.fill('#si-pass', pass || 'DemoPass2026'); await page.click('#signin button[type=submit]');
   await page.waitForURL(/dashboard/);
   return page;
 }
@@ -154,6 +154,37 @@ try {
   expect(scroll <= 392, 'Files page fits 390 px (' + scroll + ')');
   await phone.goto(B + '/dame-hub/pmo/'); await phone.waitForSelector('#up-bar');
   await shot(phone, 'upload-tile-390');
+
+  log('super user: new tile with next steps, delete a tile');
+  const owner = await as('niyaz@gmail.com', null, 'OwnerPass2026');
+  await owner.goto(B + '/dame-hub/admin.html#tiles'); await owner.waitForSelector('#tiles table');
+  await owner.click('#tile-new');
+  expect(await owner.inputValue('#tf-hosting') === 'upload', 'New tile asks how it is made first, uploaded by default');
+  await owner.fill('#tf-id', 'spp'); await owner.fill('#tf-name', 'SPP');
+  await owner.locator('.sheet button', { hasText: 'Save' }).click();
+  await owner.waitForSelector('.sheet .guide-prompt');
+  expect((await owner.inputValue('.sheet .guide-prompt')).includes('Build a tool called "SPP"'), 'next steps show the AI prompt with the tile name');
+  expect(await owner.locator('.sheet button', { hasText: 'Upload files' }).count() === 1, 'next steps offer Upload files');
+  await owner.locator('.sheet button', { hasText: 'Upload files' }).click(); await owner.waitForURL(/upload\.html\?tile=spp/);
+  await owner.waitForSelector('#guide .guide-prompt', { state: 'attached' });
+  expect(true, 'Files page carries the same guide');
+  await owner.goto(B + '/dame-hub/admin.html#tiles'); await owner.waitForSelector('#tiles table');
+  const row = owner.locator('#tiles tr', { hasText: '/dame-hub/pmo/' });
+  await row.locator('button', { hasText: 'Edit' }).click();
+  await owner.locator('.sheet button', { hasText: 'Delete tile' }).click();
+  await owner.waitForSelector('#td-confirm');
+  await owner.locator('.sheet button', { hasText: 'Delete tile' }).click();
+  expect((await owner.textContent('.sheet .notice.danger')).includes('Type the tile id'), 'delete needs the id typed');
+  await owner.fill('#td-confirm', 'pmo'); await owner.locator('.sheet button', { hasText: 'Delete tile' }).click();
+  await owner.waitForSelector('.toast.success:has-text("deleted")', { timeout: 15000 });
+  expect(psql(`select count(*) from core.tiles where id = 'pmo'`) === '0' && psql(`select count(*) from core.tile_releases where tile_id = 'pmo'`) === '0', 'tile, access and versions gone');
+  expect(!existsSync(new URL('../../pmo', import.meta.url)), 'uploaded files removed from the repo folder');
+  expect(psql(`select count(*) from core.audit where tile_id = 'pmo' and action = 'tile_delete'`) === '1', 'delete is in the audit');
+  await owner.locator('#tiles tr', { hasText: '/demo/' }).locator('button', { hasText: 'Edit' }).click();
+  await owner.locator('.sheet button', { hasText: 'Delete tile' }).click();
+  await owner.waitForSelector('.sheet textarea.guide-prompt');
+  expect((await owner.inputValue('.sheet textarea.guide-prompt')).includes('drop schema if exists demo cascade'), 'a tile with data is refused, with the script to read');
+  psql(`delete from core.tiles where id = 'spp'`);
 } catch (e) {
   errors.push(step + ': ' + e.message);
 } finally {

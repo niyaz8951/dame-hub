@@ -169,13 +169,15 @@
     });
   }
 
-  Core.requireLogin({ tile: tile, level: 'manage' }).then(function (me) {
-    Core.setTitle('Files of ' + me.tile.name);
-    $('#title').textContent = 'Files of ' + me.tile.name;
-    if (me.tile.hosting && me.tile.hosting !== 'upload') {
-      Core.showState('Built in its own repo', me.tile.name + ' is not an uploaded tile; its team changes it in its own repo. The site owner can switch it in Admin > Tiles > Edit.', { href: Core.CORE + '/dashboard.html', label: 'Dashboard' });
-      return;
-    }
+  // The guard is core_upload_check, not the tile itself: files go up while the tile is still switched off.
+  Core.requireLogin().then(function () {
+    return Api.rpc('core_upload_check', { p_tile: tile });
+  }).then(function (s) {
+    state = s;
+    Core.setTitle('Files of ' + s.name);
+    $('#title').textContent = 'Files of ' + s.name;
+    if (!s.enabled) $('#live-card').appendChild(el('p', { class: 'notice warning', text: 'This tile is switched off: users do not see it yet. The site owner switches it on in Admin > Tiles.' }));
+    $('#guide').appendChild(HubGuide.box(s.name));
     if (!('webkitdirectory' in document.createElement('input'))) $('#pick-folder-label').hidden = true;
     pick($('#pick-files')); pick($('#pick-folder'));
     var drop = $('#drop');
@@ -221,5 +223,10 @@
       });
     });
     return refresh();
-  }).catch(function (err) { Core.showError(err); });
+  }).catch(function (err) {
+    var code = err && err.code;
+    if (code === 'INVALID:hosting') Core.showState('Built in its own repo', 'This is not an uploaded tile; its team changes it in its own repo. The site owner can switch it in Admin > Tiles > Edit.', { href: Core.CORE + '/dashboard.html', label: 'Dashboard' });
+    else if (code === 'NO_ACCESS' || code === 'NO_RIGHT' || code === 'NOT_FOUND') Core.showState('Nothing here', 'Only the tile\'s managers upload its files.', { href: Core.CORE + '/dashboard.html', label: 'Dashboard' });
+    else Core.showError(err);
+  });
 })();
